@@ -73,32 +73,15 @@ local pages, tabBtns = {}, {}
 local function createTab(name)
     local b = Instance.new("TextButton", TabContainer) b.Size, b.BackgroundColor3, b.BackgroundTransparency, b.Text, b.TextColor3, b.Font, b.TextSize = UDim2.new(0.85,0,0,36), THEME.DARK_ITEM, 1, name, THEME.TEXT_DIM, Enum.Font.GothamBold, 12 corner(b,8) stroke(b,THEME.DARK_ITEM,1,true)
     local p = Instance.new("ScrollingFrame", ContentArea) p.Size, p.BackgroundTransparency, p.Visible, p.ScrollBarThickness, p.ScrollBarImageColor3, p.AutomaticCanvasSize = UDim2.new(1,0,1,0), 1, false, 2, THEME.ACCENT, Enum.AutomaticSize.Y
-    Instance.new("UIListLayout", p).Padding, Instance.new("UIListLayout", p).SortOrder = UDim.new(0,8), Enum.SortOrder.LayoutOrder
+    local l = Instance.new("UIListLayout", p) l.Padding, l.SortOrder = UDim.new(0,8), Enum.SortOrder.LayoutOrder
     b.MouseButton1Click:Connect(function() for _,x in pages do x.Visible = false end for _,x in tabBtns do tween(x,{BackgroundTransparency=1,TextColor3=THEME.TEXT_DIM},0.2) end p.Visible, b.BackgroundTransparency, b.TextColor3 = true, 0, THEME.ACCENT end)
     table.insert(pages, p) table.insert(tabBtns, b) return p
 end
 
 local function addSection(parent, title)
-    local f = Instance.new("Frame", parent)
-    f.Size = UDim2.new(1, 0, 0, 30)
-    f.BackgroundTransparency = 1
-    local l = Instance.new("TextLabel", f)
-    l.Size = UDim2.new(1, 0, 1, 0)
-    l.BackgroundTransparency = 1
-    l.Text = title:upper()
-    l.TextColor3 = THEME.ACCENT
-    l.Font = Enum.Font.GothamBold
-    l.TextSize = 12
-    l.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local line = Instance.new("Frame", f)
-    line.Size = UDim2.new(1, 0, 0, 1)
-    line.Position = UDim2.new(0, 0, 1, -2)
-    line.BackgroundColor3 = THEME.ACCENT
-    line.BackgroundTransparency = 0.5
-    line.BorderSizePixel = 0
-    stroke(f, THEME.ACCENT, 1, false)
-    return f
+    local f = Instance.new("Frame", parent) f.Size, f.BackgroundTransparency = UDim2.new(1,0,0,32), 1
+    local l = Instance.new("TextLabel", f) l.Size, l.Position, l.BackgroundTransparency, l.Text, l.TextColor3, l.Font, l.TextSize, l.TextXAlignment = UDim2.new(1,0,1,-4), UDim2.new(0,4,0,0), 1, title:upper(), THEME.ACCENT, Enum.Font.GothamBold, 12, 0
+    local line = Instance.new("Frame", f) line.Size, line.Position, line.BackgroundColor3, line.BackgroundTransparency, line.BorderSizePixel = UDim2.new(1,0,0,1), UDim2.new(0,0,1,-2), THEME.ACCENT, 0.5, 0 return f
 end
 
 local function addToggle(p, t, d, c)
@@ -974,27 +957,20 @@ ui_controls.espEnabled = addToggle(espList, "Enabled", false, function(v) espSet
 ui_controls.espText = addToggle(espList, "Show HP Text", true, function(v) espSettings.ShowText = v end)
 ui_controls.espBar = addToggle(espList, "Show HP Bar", true, function(v) espSettings.ShowBar = v end)
 
-addButton(TabUtils, "Remove Fog & Effects", THEME.ACCENT, function()
-    for _, v in Lighting:GetChildren() do
-        if v:IsA("Atmosphere") or v.Name:find("Fog") then
-            pcall(function() v:Destroy() end)
-        end
-    end
-    Lighting.FogEnd = 9e9
-    Lighting.FogStart = 0
-    Lighting.GlobalShadows = false
-    Lighting.ExposureCompensation = 1
-end)
-
 addSection(TabUtils, "Others")
+addButton(TabUtils, "Remove Fog & Effects", THEME.ACCENT, function()
+    for _, v in Lighting:GetChildren() do if v:IsA("Atmosphere") or v.Name:find("Fog") then pcall(function() v:Destroy() end) end end
+    Lighting.FogEnd, Lighting.FogStart, Lighting.GlobalShadows, Lighting.ExposureCompensation = 9e9, 0, false, 1
+end)
 addButton(TabUtils, "Infinite Yield", THEME.ACCENT, function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))() end)
 
 addSection(TabUtils, "Server Hopper")
 local hopFrame = Instance.new("Frame", TabUtils)
-hopFrame.Size = UDim2.new(1, 0, 0, 30) hopFrame.BackgroundTransparency = 1
+hopFrame.Size, hopFrame.BackgroundTransparency = UDim2.new(1, 0, 0, 25), 1
 hopStatusLabel = Instance.new("TextLabel", hopFrame)
-hopStatusLabel.Size = UDim2.new(1, 0, 1, 0) hopStatusLabel.BackgroundTransparency = 1
-hopStatusLabel.Text = "Bấm để săn server vắng nhất" hopStatusLabel.TextColor3 = THEME.TEXT_DIM hopStatusLabel.Font = Enum.Font.Gotham hopStatusLabel.TextSize = 12
+hopStatusLabel.Size, hopStatusLabel.BackgroundTransparency = UDim2.new(1, 0, 1, 0), 1
+hopStatusLabel.Text, hopStatusLabel.TextColor3, hopStatusLabel.Font, hopStatusLabel.TextSize = "Bấm để săn server vắng nhất", THEME.TEXT_DIM, Enum.Font.Gotham, 12
+
 addButton(TabUtils, "Small Server Hop", THEME.ACCENT, function() executeHop() end)
 addButton(TabUtils, "Old Server (4H+)", THEME.DARK_ITEM, function() hopToOldServer("4h") end)
 addButton(TabUtils, "Old Server (3H45+)", THEME.DARK_ITEM, function() hopToOldServer("3h45") end)
