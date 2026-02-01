@@ -1,67 +1,35 @@
--- [[ SYSTEM SERVICES ]]
 local Players, RunService, UserInputService, CoreGui, ReplicatedStorage, TweenService, HttpService, TeleportService, Lighting = game:GetService("Players"), game:GetService("RunService"), game:GetService("UserInputService"), game:GetService("CoreGui"), game:GetService("ReplicatedStorage"), game:GetService("TweenService"), game:GetService("HttpService"), game:GetService("TeleportService"), game:GetService("Lighting")
-
--- [[ PLAYER & CHARACTER ]]
-local player = Players.LocalPlayer
+local player, currentTab, guiVisible = Players.LocalPlayer, 1, true
 local char = player.Character or player.CharacterAdded:Wait()
 player.CharacterAdded:Connect(function(c) char = c end)
-
--- [[ UI & CORE STATES ]]
-local currentTab: number, guiVisible: boolean = 1, true
-local ui_controls, configFolder, configFileName = {}, "j4f", "j4f/config_j4f.json"
-local allStrokes, allBtnStrokes = {}, {}
-
--- [[ HITBOX & MOB SETTINGS ]]
-local hitboxEnabled = {self = false, others = false, mob = false}
-local hitboxSize = {self = 10, others = 10, mob = 10}
-local showHitbox = {self = false, others = false, mob = false}
+local ui_controls, configFolder, configFileName, allStrokes, allBtnStrokes = {}, "j4f", "j4f/config_j4f.json", {}, {}
+local hitboxEnabled, hitboxSize, showHitbox = {self = false, others = false, mob = false}, {self = 10, others = 10, mob = 10}, {self = false, others = false, mob = false}
 local selectedBodyParts = {
     self = {Head = false, Torso = false, ["Left Arm"] = false, ["Right Arm"] = false, ["Left Leg"] = false, ["Right Leg"] = false, HumanoidRootPart = false},
     others = {Head = false, Torso = false, ["Left Arm"] = false, ["Right Arm"] = false, ["Left Leg"] = false, ["Right Leg"] = false, HumanoidRootPart = false},
     mob = {Head = false, Torso = false, ["Left Arm"] = false, ["Right Arm"] = false, ["Left Leg"] = false, ["Right Leg"] = false, HumanoidRootPart = false}
 }
-local mobPath: string, originalProperties, processedParts, mobCache = "workspace", {}, {}, {lastScan = 0, list = {}}
-
--- [[ COMBAT & FRUIT LOGIC ]]
-local auraEnabled: boolean, auraRadius, auraDelay, lastHitTime, hitCount = false, 20, 0.01, 0, 0
-local attackRemote: RemoteEvent?, hitRemote: RemoteEvent?, auraConnection: RBXScriptConnection? = nil, nil, nil
-local isSpamming: boolean, spamConnection: RBXScriptConnection?, fruitDelay, lastAttack = false, nil, 0.01, 0
-local selectedAttacks: {boolean} = {true, true, true, true, true}
-local fastM1Enabled: boolean, fastMeleeMultiplier, fastFruitMultiplier = false, 1, 1
-
--- [[ MOVEMENT & WORLD ]]
-local boatSpeed, tpEnabled, tpSpeed = 200, false, 2
-local autoRaceV3Enabled, infinityJumpEnabled = false, false
-local jumpHeightEnabled: boolean, jumpHeightValue, dashLengthValue = false, 7.2, 0
-local waterWalkEnabled: boolean, antiWaterEnabled, antiWaterThreshold = true, true, -0.807
-
--- [[ FLY BOAT & TWEEN SETTINGS ]]
-local flyBoatEnabled, flyBoatSpeed, flyBoatHeight = false, 200, 125
-local currentBoat: Model?, flyBoatStyle, isPlayerOnBoat = nil, "Default", false
-local islandTweenEnabled = {["Mirage Island"] = false, ["Kitsune Island"] = false, ["Prehistoric Island"] = false}
-local islandTweenSpeed: number = 300
-
--- [[ ESP & VISUALS ]]
-local espSettings = { Enabled = false, ShowText = true, ShowBar = true }
-local espConnection: RBXScriptConnection?, espBillboards = nil, {}
-local islandEspSettings = { Enabled = false, ESP_List = {["Mirage Island"] = false, ["Kitsune Island"] = false, ["Prehistoric Island"] = false} }
-local islandEspBillboards = {}
-
--- [[ AUTO FARMING ]]
-local autoChestMirage, autoChestStyle, autoChestType = false, "Tween", "All"
-local autoActiveV4Enabled, autoTradeBonesEnabled = false, false
-
--- Adaptive Performance
+local mobPath, originalProperties, processedParts, mobCache = "workspace", {}, {}, {lastScan = 0, list = {}}
+local auraEnabled, auraRadius, auraDelay, lastHitTime, hitCount = false, 20, 0.01, 0, 0
+local attackRemote, hitRemote, auraConnection, isSpamming, spamConnection, fruitDelay, lastAttack = nil, nil, nil, false, nil, 0.01, 0
+local selectedAttacks, fastM1Enabled, fastMeleeMultiplier, fastFruitMultiplier = {true, true, true, true, true}, false, 1, 1
+local boatSpeed, tpEnabled, tpSpeed, autoRaceV3Enabled, infinityJumpEnabled = 200, false, 2, false, false
+local jumpHeightEnabled, jumpHeightValue, dashLengthValue, waterWalkEnabled, antiWaterEnabled, antiWaterThreshold = false, 7.2, 0, true, true, -0.807
+local flyBoatEnabled, flyBoatSpeed, flyBoatHeight, currentBoat, flyBoatStyle, isPlayerOnBoat = false, 200, 125, nil, "Default", false
+local islandTweenEnabled, islandTweenSpeed = {["Mirage Island"] = false, ["Kitsune Island"] = false, ["Prehistoric Island"] = false}, 300
+local espSettings, espConnection, espBillboards = { Enabled = false, ShowText = true, ShowBar = true }, nil, {}
+local islandEspSettings, islandEspBillboards = { Enabled = false, ESP_List = {["Mirage Island"] = false, ["Kitsune Island"] = false, ["Prehistoric Island"] = false} }, {}
+local autoChestMirage, autoChestStyle, autoChestType, autoActiveV4Enabled, autoTradeBonesEnabled, autoStoreFruitEnabled, autoDungeonEnabled = false, "Tween", "All", false, false, false, false
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 local baseScanInterval = isMobile and 0.8 or 0.5
-local scanInterval = baseScanInterval
-local espInterval = isMobile and 1.0 or 0.5
+local scanInterval, espInterval = baseScanInterval, isMobile and 1.0 or 0.5
+local THEME = {BG_MAIN = Color3.fromRGB(15,15,20), BG_SIDE = Color3.fromRGB(22,22,28), BG_CONTENT = Color3.fromRGB(26,26,32), ACCENT = Color3.fromRGB(255,30,60), TEXT = Color3.fromRGB(255,255,255), TEXT_DIM = Color3.fromRGB(160,160,160), GREEN = Color3.fromRGB(60,230,120), RED = Color3.fromRGB(255,80,80), DARK_ITEM = Color3.fromRGB(35,35,45)}
 
 local THEME = {
     BG_MAIN = Color3.fromRGB(15, 15, 20),
     BG_SIDE = Color3.fromRGB(22, 22, 28),
     BG_CONTENT = Color3.fromRGB(26, 26, 32),
-    ACCENT = Color3.fromRGB(255, 30, 60), -- Đỏ rực cháy
+    ACCENT = Color3.fromRGB(255, 30, 60),
     TEXT = Color3.fromRGB(255, 255, 255),
     TEXT_DIM = Color3.fromRGB(160, 160, 160),
     GREEN = Color3.fromRGB(60, 230, 120),
@@ -69,191 +37,45 @@ local THEME = {
     DARK_ITEM = Color3.fromRGB(35, 35, 45)
 }
 
--- UI LIBRARY
-local function corner(parent, radius)
-    local c = Instance.new("UICorner", parent)
-    c.CornerRadius = UDim.new(0, radius or 8)
-    return c
+local function corner(p, r) local c = Instance.new("UICorner", p) c.CornerRadius = UDim.new(0, r or 8) return c end
+local function stroke(p, c, t, b) local s = Instance.new("UIStroke", p) s.Color = c or (b and THEME.ACCENT or Color3.fromRGB(50,50,60)) s.Thickness = t or 1 s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border return s end
+local function toHex(c3) return string.format("#%02X%02X%02X", c3.R*255, c3.G*255, c3.B*255) end
+local function fromHex(h) h = h:gsub("#","") local r,g,b = tonumber(h:sub(1,2),16), tonumber(h:sub(3,4),16), tonumber(h:sub(5,6),16) return Color3.fromRGB(r or 255, g or 255, b or 255) end
+local function tween(o, p, d) TweenService:Create(o, TweenInfo.new(d or 0.3, Enum.EasingStyle.Quart), p):Play() end
+local function makeDraggable(o)
+    local drag, dInput, dStart, sPos
+    o.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then drag, dStart, sPos = true, i.Position, o.Position i.Changed:Connect(function() if i.UserInputState == Enum.UserInputState.End then drag = false end end) end end)
+    o.InputChanged:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then dInput = i end end)
+    UserInputService.InputChanged:Connect(function(i) if i == dInput and drag then local d = i.Position - dStart o.Position = UDim2.new(sPos.X.Scale, sPos.X.Offset + d.X, sPos.Y.Scale, sPos.Y.Offset + d.Y) end end)
 end
-
-local function stroke(parent, color, thickness, isButton)
-    local s = Instance.new("UIStroke", parent)
-    s.Color = color or (isButton and THEME.ACCENT or Color3.fromRGB(50, 50, 60))
-    s.Thickness = thickness or 1
-    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    return s
-end
-
-local function toHex(c3)
-    return string.format("#%02X%02X%02X", c3.R*255, c3.G*255, c3.B*255)
-end
-
-local function fromHex(hex)
-    hex = hex:gsub("#", "")
-    local r, g, b = tonumber(hex:sub(1,2), 16), tonumber(hex:sub(3,4), 16), tonumber(hex:sub(5,6), 16)
-    return Color3.fromRGB(r or 255, g or 255, b or 255)
-end
-
-local function tween(obj, props, duration)
-    TweenService:Create(obj, TweenInfo.new(duration or 0.3, Enum.EasingStyle.Quart), props):Play()
-end
-
-local function makeDraggable(obj)
-    local dragging, dragInput, dragStart, startPos
-    obj.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = obj.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then dragging = false end
-            end)
-        end
-    end)
-    obj.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            obj.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-end
-
-
-
 local function refreshUI()
     if ScreenGui:FindFirstChild("MainFrame") then
-        local main = ScreenGui.MainFrame
-        main.BackgroundColor3 = THEME.BG_MAIN
-        main.BackgroundTransparency = 0
-        local sidebar = main:FindFirstChild("Sidebar")
-        if sidebar then
-            sidebar.BackgroundColor3 = THEME.BG_SIDE
-            sidebar.BackgroundTransparency = 0
-            local label = sidebar:FindFirstChild("SidebarLabel")
-            if label then label.TextColor3 = THEME.ACCENT end
-        end
-        for _, s in allStrokes or {} do s.Color = Color3.fromRGB(50, 50, 60) end
-        for _, s in allBtnStrokes or {} do s.Color = THEME.ACCENT end
+        local m = ScreenGui.MainFrame m.BackgroundColor3, m.BackgroundTransparency = THEME.BG_MAIN, 0
+        local s = m:FindFirstChild("Sidebar") if s then s.BackgroundColor3, s.BackgroundTransparency = THEME.BG_SIDE, 0 local l = s:FindFirstChild("SidebarLabel") if l then l.TextColor3 = THEME.ACCENT end end
+        for _,v in allStrokes or {} do v.Color = Color3.fromRGB(50,50,60) end
+        for _,v in allBtnStrokes or {} do v.Color = THEME.ACCENT end
     end
 end
 
--- MAIN GUI
-local ScreenGui = Instance.new("ScreenGui", CoreGui)
-ScreenGui.Name = "HB_PRO_V3"
-ScreenGui.ResetOnSpawn = false
-
-local ToggleBtn = Instance.new("ImageButton", ScreenGui)
-ToggleBtn.Size = UDim2.new(0, 60, 0, 60)
-ToggleBtn.Position = UDim2.new(0.02, 0, 0.5, -30)
-ToggleBtn.BackgroundColor3 = THEME.BG_SIDE
-ToggleBtn.BackgroundTransparency = 0.2
-ToggleBtn.Image = "rbxthumb://type=Asset&id=84053545044369&w=420&h=420"
-ToggleBtn.ImageColor3 = Color3.new(1, 1, 1)
-ToggleBtn.ScaleType = Enum.ScaleType.Fit
-ToggleBtn.ZIndex = 15
-corner(ToggleBtn, 12)
-stroke(ToggleBtn, THEME.ACCENT, 2, true) -- Đặt là true để nó theo viền nút (luôn là màu Accent)
-makeDraggable(ToggleBtn)
-
-local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 540, 0, 340)
-MainFrame.Position = UDim2.new(0.5, -270, 0.5, -170)
-MainFrame.BackgroundColor3 = THEME.BG_MAIN
-MainFrame.BorderSizePixel = 0
-MainFrame.ClipsDescendants = true
-corner(MainFrame, 12)
-stroke(MainFrame, THEME.ACCENT, 2, false) -- Khung viền đỏ dày 2px cực nét
-makeDraggable(MainFrame)
-
-local Sidebar = Instance.new("Frame", MainFrame)
-Sidebar.Size = UDim2.new(0, 110, 1, 0)
-Sidebar.BackgroundColor3 = THEME.BG_SIDE
-Sidebar.BorderSizePixel = 0
-corner(Sidebar, 12)
-
-local SidebarLabel = Instance.new("TextLabel", Sidebar)
-SidebarLabel.Size = UDim2.new(1, 0, 0, 35)
-SidebarLabel.Position = UDim2.new(0, 0, 0, 5)
-SidebarLabel.BackgroundTransparency = 1
-SidebarLabel.Text = "j4f"
-SidebarLabel.TextColor3 = THEME.ACCENT
-SidebarLabel.Font = Enum.Font.GothamBold
-SidebarLabel.TextSize = 22
-
-local AuthorLabel = Instance.new("TextLabel", Sidebar)
-AuthorLabel.Size = UDim2.new(1, 0, 0, 20)
-AuthorLabel.Position = UDim2.new(0, 0, 0, 35)
-AuthorLabel.BackgroundTransparency = 1
-AuthorLabel.Text = "by tiktok: @realayako"
-AuthorLabel.TextColor3 = THEME.TEXT_DIM
-AuthorLabel.Font = Enum.Font.GothamMedium
-AuthorLabel.TextSize = 10
-
-local TabContainer = Instance.new("Frame", Sidebar)
-TabContainer.Size = UDim2.new(1, 0, 1, -70)
-TabContainer.Position = UDim2.new(0, 0, 0, 70)
-TabContainer.BackgroundTransparency = 1
-
-local TabLayout = Instance.new("UIListLayout", TabContainer)
-TabLayout.Padding = UDim.new(0, 6)
-TabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
-ToggleBtn.MouseButton1Click:Connect(function()
-    guiVisible = not guiVisible
-    MainFrame.Visible = guiVisible
-    tween(ToggleBtn, {BackgroundColor3 = guiVisible and THEME.BG_SIDE or Color3.fromRGB(30,30,35)}, 0.2)
-end)
-
-local ContentArea = Instance.new("Frame", MainFrame)
-ContentArea.Size = UDim2.new(1, -125, 1, -15)
-ContentArea.Position = UDim2.new(0, 120, 0, 10)
-ContentArea.BackgroundTransparency = 1
-
-local pages = {}
-local tabBtns = {}
-
+local ScreenGui = Instance.new("ScreenGui", CoreGui) ScreenGui.Name, ScreenGui.ResetOnSpawn = "HB_PRO_V3", false
+local ToggleBtn = Instance.new("ImageButton", ScreenGui) ToggleBtn.Size, ToggleBtn.Position, ToggleBtn.BackgroundColor3, ToggleBtn.BackgroundTransparency, ToggleBtn.Image, ToggleBtn.ScaleType, ToggleBtn.ZIndex = UDim2.new(0,60,0,60), UDim2.new(0.02,0,0.5,-30), THEME.BG_SIDE, 0.2, "rbxthumb://type=Asset&id=84053545044369&w=420&h=420", Enum.ScaleType.Fit, 15
+corner(ToggleBtn,12) stroke(ToggleBtn,THEME.ACCENT,2,true) makeDraggable(ToggleBtn)
+local MainFrame = Instance.new("Frame", ScreenGui) MainFrame.Name, MainFrame.Size, MainFrame.Position, MainFrame.BackgroundColor3, MainFrame.BorderSizePixel, MainFrame.ClipsDescendants = "MainFrame", UDim2.new(0,540,0,340), UDim2.new(0.5,-270,0.5,-170), THEME.BG_MAIN, 0, true
+corner(MainFrame,12) stroke(MainFrame,THEME.ACCENT,2,false) makeDraggable(MainFrame)
+local Sidebar = Instance.new("Frame", MainFrame) Sidebar.Size, Sidebar.BackgroundColor3, Sidebar.BorderSizePixel = UDim2.new(0,110,1,0), THEME.BG_SIDE, 0 corner(Sidebar,12)
+local SidebarLabel = Instance.new("TextLabel", Sidebar) SidebarLabel.Size, SidebarLabel.Position, SidebarLabel.BackgroundTransparency, SidebarLabel.Text, SidebarLabel.TextColor3, SidebarLabel.Font, SidebarLabel.TextSize = UDim2.new(1,0,0,35), UDim2.new(0,0,0,5), 1, "j4f", THEME.ACCENT, Enum.Font.GothamBold, 22
+local AuthorLabel = Instance.new("TextLabel", Sidebar) AuthorLabel.Size, AuthorLabel.Position, AuthorLabel.BackgroundTransparency, AuthorLabel.Text, AuthorLabel.TextColor3, AuthorLabel.Font, AuthorLabel.TextSize = UDim2.new(1,0,0,20), UDim2.new(0,0,0,35), 1, "by tiktok: @realayako", THEME.TEXT_DIM, Enum.Font.GothamMedium, 10
+local TabContainer = Instance.new("Frame", Sidebar) TabContainer.Size, TabContainer.Position, TabContainer.BackgroundTransparency = UDim2.new(1,0,1,-70), UDim2.new(0,0,0,70), 1
+local TabLayout = Instance.new("UIListLayout", TabContainer) TabLayout.Padding, TabLayout.HorizontalAlignment = UDim.new(0,6), Enum.HorizontalAlignment.Center
+ToggleBtn.MouseButton1Click:Connect(function() guiVisible = not guiVisible MainFrame.Visible = guiVisible tween(ToggleBtn, {BackgroundColor3 = guiVisible and THEME.BG_SIDE or Color3.fromRGB(30,30,35)}, 0.2) end)
+local ContentArea = Instance.new("Frame", MainFrame) ContentArea.Size, ContentArea.Position, ContentArea.BackgroundTransparency = UDim2.new(1,-125,1,-15), UDim2.new(0,120,0,10), 1
+local pages, tabBtns = {}, {}
 local function createTab(name)
-    local btn = Instance.new("TextButton", TabContainer)
-    btn.Size = UDim2.new(0.85, 0, 0, 36)
-    btn.BackgroundColor3 = THEME.DARK_ITEM
-    btn.BackgroundTransparency = 1
-    btn.Text = name
-    btn.TextColor3 = THEME.TEXT_DIM
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 12
-    corner(btn, 8)
-    stroke(btn, THEME.DARK_ITEM, 1, true)
-    
-    local page = Instance.new("ScrollingFrame", ContentArea)
-    page.Size = UDim2.new(1, 0, 1, 0)
-    page.BackgroundTransparency = 1
-    page.Visible = false
-    page.ScrollBarThickness = 2
-    page.ScrollBarImageColor3 = THEME.ACCENT
-    page.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    
-    local pageLayout = Instance.new("UIListLayout", page)
-    pageLayout.Padding = UDim.new(0, 8)
-    pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    
-    btn.MouseButton1Click:Connect(function()
-        for _, p in pages do p.Visible = false end
-        for _, b in tabBtns do 
-            tween(b, {BackgroundTransparency = 1, TextColor3 = THEME.TEXT_DIM}, 0.2)
-        end
-        page.Visible = true
-        tween(btn, {BackgroundTransparency = 0, TextColor3 = THEME.ACCENT}, 0.2)
-    end)
-    
-    table.insert(pages, page)
-    table.insert(tabBtns, btn)
-    return page
+    local b = Instance.new("TextButton", TabContainer) b.Size, b.BackgroundColor3, b.BackgroundTransparency, b.Text, b.TextColor3, b.Font, b.TextSize = UDim2.new(0.85,0,0,36), THEME.DARK_ITEM, 1, name, THEME.TEXT_DIM, Enum.Font.GothamBold, 12 corner(b,8) stroke(b,THEME.DARK_ITEM,1,true)
+    local p = Instance.new("ScrollingFrame", ContentArea) p.Size, p.BackgroundTransparency, p.Visible, p.ScrollBarThickness, p.ScrollBarImageColor3, p.AutomaticCanvasSize = UDim2.new(1,0,1,0), 1, false, 2, THEME.ACCENT, Enum.AutomaticSize.Y
+    Instance.new("UIListLayout", p).Padding, Instance.new("UIListLayout", p).SortOrder = UDim.new(0,8), Enum.SortOrder.LayoutOrder
+    b.MouseButton1Click:Connect(function() for _,x in pages do x.Visible = false end for _,x in tabBtns do tween(x,{BackgroundTransparency=1,TextColor3=THEME.TEXT_DIM},0.2) end p.Visible, b.BackgroundTransparency, b.TextColor3 = true, 0, THEME.ACCENT end)
+    table.insert(pages, p) table.insert(tabBtns, b) return p
 end
 
 local function addSection(parent, title)
@@ -279,370 +101,73 @@ local function addSection(parent, title)
     return f
 end
 
-local function addToggle(parent, text, default, callback)
-    local f = Instance.new("Frame", parent)
-    f.Size = UDim2.new(1, 0, 0, 40)
-    f.BackgroundColor3 = THEME.BG_CONTENT
-    corner(f, 6)
-    
-    local l = Instance.new("TextLabel", f)
-    l.Size = UDim2.new(1, -60, 1, 0)
-    l.Position = UDim2.new(0, 12, 0, 0)
-    l.BackgroundTransparency = 1
-    l.Text = text
-    l.TextColor3 = THEME.TEXT
-    l.Font = Enum.Font.Gotham
-    l.TextSize = 13
-    l.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local btn = Instance.new("TextButton", f)
-    btn.Size = UDim2.new(0, 36, 0, 20)
-    btn.Position = UDim2.new(1, -48, 0.5, -10)
-    btn.BackgroundColor3 = default and THEME.ACCENT or Color3.fromRGB(60, 60, 70)
-    btn.Text = ""
-    corner(btn, 10)
-    
-    local circle = Instance.new("Frame", btn)
-    circle.Size = UDim2.new(0, 16, 0, 16)
-    circle.Position = UDim2.new(default and 1 or 0, default and -18 or 2, 0.5, -8)
-    circle.BackgroundColor3 = Color3.new(1,1,1)
-    corner(circle, 8)
-    
-    local enabled = default
-    btn.MouseButton1Click:Connect(function()
-        enabled = not enabled
-        tween(btn, {BackgroundColor3 = enabled and THEME.ACCENT or Color3.fromRGB(60, 60, 70)}, 0.2)
-        tween(circle, {Position = UDim2.new(enabled and 1 or 0, enabled and -18 or 2, 0.5, -8)}, 0.2)
-        callback(enabled)
-    end)
-    return {Set = function(v)
-        enabled = v
-        btn.BackgroundColor3 = enabled and THEME.ACCENT or Color3.fromRGB(60, 60, 70)
-        circle.Position = UDim2.new(enabled and 1 or 0, enabled and -18 or 2, 0.5, -8)
-    end}
+local function addToggle(p, t, d, c)
+    local f = Instance.new("Frame", p) f.Size, f.BackgroundColor3 = UDim2.new(1,0,0,40), THEME.BG_CONTENT corner(f,6)
+    local l = Instance.new("TextLabel", f) l.Size, l.Position, l.BackgroundTransparency, l.Text, l.TextColor3, l.Font, l.TextSize, l.TextXAlignment = UDim2.new(1,-60,1,0), UDim2.new(0,12,0,0), 1, t, THEME.TEXT, Enum.Font.Gotham, 13, 0
+    local b = Instance.new("TextButton", f) b.Size, b.Position, b.BackgroundColor3, b.Text = UDim2.new(0,36,0,20), UDim2.new(1,-48,0.5,-10), d and THEME.ACCENT or Color3.fromRGB(60,60,70), "" corner(b,10)
+    local o = Instance.new("Frame", b) o.Size, o.Position, o.BackgroundColor3 = UDim2.new(0,16,0,16), UDim2.new(d and 1 or 0, d and -18 or 2, 0.5, -8), Color3.new(1,1,1) corner(o,8)
+    local en = d b.MouseButton1Click:Connect(function() en = not en tween(b,{BackgroundColor3=en and THEME.ACCENT or Color3.fromRGB(60,60,70)},0.2) tween(o,{Position=UDim2.new(en and 1 or 0, en and -18 or 2, 0.5,-8)},0.2) c(en) end)
+    return {Set = function(v) en = v b.BackgroundColor3 = en and THEME.ACCENT or Color3.fromRGB(60,60,70) o.Position = UDim2.new(en and 1 or 0, en and -18 or 2, 0.5,-8) end}
 end
-
-local function addSlider(parent, text, min, max, default, decimals, callback)
-    local f = Instance.new("Frame", parent)
-    f.Size = UDim2.new(1, 0, 0, 55)
-    f.BackgroundColor3 = THEME.BG_CONTENT
-    corner(f, 6)
-    local l = Instance.new("TextLabel", f)
-    l.Size = UDim2.new(1, -20, 0, 25)
-    l.Position = UDim2.new(0, 12, 0, 5)
-    l.BackgroundTransparency = 1
-    l.Text = text .. ": " .. default
-    l.TextColor3 = THEME.TEXT
-    l.Font = Enum.Font.Gotham
-    l.TextSize = 13
-    l.TextXAlignment = Enum.TextXAlignment.Left
-    local bg = Instance.new("Frame", f)
-    bg.Size = UDim2.new(1, -24, 0, 4)
-    bg.Position = UDim2.new(0, 12, 0, 38)
-    bg.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-    corner(bg, 2)
-    local fill = Instance.new("Frame", bg)
-    fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
-    fill.BackgroundColor3 = THEME.ACCENT
-    corner(fill, 2)
-    local trigger = Instance.new("TextButton", f)
-    trigger.Size = UDim2.new(1, 0, 1, 0)
-    trigger.BackgroundTransparency = 1
-    trigger.Text = ""
-    trigger.Name = "SliderTrigger"
-    
-    local btn = Instance.new("Frame", bg)
-    btn.Size = UDim2.new(0, 14, 0, 14)
-    btn.Position = UDim2.new((default - min) / (max - min), -7, 0.5, -7)
-    btn.BackgroundColor3 = Color3.new(1, 1, 1)
-    corner(btn, 7)
-    
-    local p = 10^(decimals or 0)
-    local function formatVal(v) return (decimals or 0) <= 0 and tostring(math.round(v)) or tostring(math.floor(v * p + 0.5) / p) end
-    local dragging = false
-
-    local function update(input)
-        local pos = input.Position.X
-        local bgPos = bg.AbsolutePosition.X
-        local bgSize = bg.AbsoluteSize.X
-        local rel = math.clamp((pos - bgPos) / bgSize, 0, 1)
-        local val = math.floor((min + (max - min) * rel) * p + 0.5) / p
-        l.Text = text .. ": " .. formatVal(val)
-        fill.Size = UDim2.new(rel, 0, 1, 0)
-        btn.Position = UDim2.new(rel, -7, 0.5, -7)
-        callback(val)
+local function addSlider(p, t, min, max, d, dec, c)
+    local f = Instance.new("Frame", p) f.Size, f.BackgroundColor3 = UDim2.new(1,0,0,55), THEME.BG_CONTENT corner(f,6)
+    local l = Instance.new("TextLabel", f) l.Size, l.Position, l.BackgroundTransparency, l.Text, l.TextColor3, l.Font, l.TextSize, l.TextXAlignment = UDim2.new(1,-20,0,25), UDim2.new(0,12,0,5), 1, t..": "..d, THEME.TEXT, Enum.Font.Gotham, 13, 0
+    local bg = Instance.new("Frame", f) bg.Size, bg.Position, bg.BackgroundColor3 = UDim2.new(1,-24,0,4), UDim2.new(0,12,0,38), Color3.fromRGB(45,45,55) corner(bg,2)
+    local fill = Instance.new("Frame", bg) fill.Size, fill.BackgroundColor3 = UDim2.new((d-min)/(max-min),0,1,0), THEME.ACCENT corner(fill,2)
+    local btn = Instance.new("Frame", bg) btn.Size, btn.Position, btn.BackgroundColor3 = UDim2.new(0,14,0,14), UDim2.new((d-min)/(max-min),-7,0.5,-7), Color3.new(1,1,1) corner(btn,7)
+    local tr = Instance.new("TextButton", f) tr.Size, tr.BackgroundTransparency, tr.Text = UDim2.new(1,0,1,0), 1, ""
+    local prec, drag = 10^(dec or 0), false
+    local function fV(v) return (dec or 0) <= 0 and tostring(math.round(v)) or tostring(math.floor(v*prec+0.5)/prec) end
+    local function up(i) local rel = math.clamp((i.Position.X-bg.AbsolutePosition.X)/bg.AbsoluteSize.X, 0, 1) local v = math.floor((min+(max-min)*rel)*prec+0.5)/prec l.Text, fill.Size, btn.Position = t..": "..fV(v), UDim2.new(rel,0,1,0), UDim2.new(rel,-7,0.5,-7) c(v) end
+    tr.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then drag = true up(i) end end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then drag = false end end)
+    UserInputService.InputChanged:Connect(function(i) if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then up(i) end end)
+    return {Set = function(v) local rel = math.clamp((v-min)/(max-min), 0,1) l.Text, fill.Size, btn.Position = t..": "..fV(v), UDim2.new(rel,0,1,0), UDim2.new(rel,-7,0.5,-7) end}
+end
+local function addInput(p, t, d, ph, c)
+    local f = Instance.new("Frame", p) f.Size, f.BackgroundColor3 = UDim2.new(1,0,0,55), THEME.BG_CONTENT corner(f,6)
+    local l = Instance.new("TextLabel", f) l.Size, l.Position, l.BackgroundTransparency, l.Text, l.TextColor3, l.Font, l.TextSize, l.TextXAlignment = UDim2.new(1,-20,0,25), UDim2.new(0,12,0,5), 1, t, THEME.TEXT, Enum.Font.Gotham, 13, 0
+    local i = Instance.new("TextBox", f) i.Size, i.Position, i.BackgroundColor3, i.Text, i.PlaceholderText, i.TextColor3, i.Font, i.TextSize, i.ClearTextOnFocus = UDim2.new(1,-24,0,24), UDim2.new(0,12,0,26), THEME.BG_MAIN, d, ph, THEME.TEXT, Enum.Font.Gotham, 12, false corner(i,4) i.FocusLost:Connect(function() c(i.Text) end) return i
+end
+local function addButton(p, t, cl, c)
+    local b = Instance.new("TextButton", p) b.Size, b.BackgroundColor3, b.Text, b.TextColor3, b.Font, b.TextSize = UDim2.new(1,0,0,36), cl or THEME.DARK_ITEM, t, THEME.TEXT, Enum.Font.GothamBold, 13 corner(b,6)
+    b.MouseButton1Click:Connect(function() tween(b,{BackgroundTransparency=0.5},0.1) task.wait(0.1) tween(b,{BackgroundTransparency=0},0.1) c() end) return b
+end
+local function addDropdown(p, t, is, d, c)
+    local f = Instance.new("Frame", p) f.Size, f.BackgroundColor3, f.ClipsDescendants = UDim2.new(1,0,0,40), THEME.BG_CONTENT, true corner(f,6)
+    local l = Instance.new("TextButton", f) l.Size, l.BackgroundTransparency, l.Text, l.TextColor3, l.Font, l.TextSize, l.TextXAlignment = UDim2.new(1,0,0,40), 1, "  "..t..": "..d, THEME.TEXT, Enum.Font.Gotham, 13, 0
+    local list = Instance.new("Frame", f) list.Size, list.Position, list.BackgroundTransparency = UDim2.new(1,0,0,#is*30), UDim2.new(0,0,0,40), 1 Instance.new("UIListLayout", list)
+    for _,v in is do
+        local ib = Instance.new("TextButton", list) ib.Size, ib.BackgroundColor3, ib.BorderSizePixel, ib.Text, ib.TextColor3, ib.Font, ib.TextSize, ib.TextXAlignment = UDim2.new(1,0,0,30), Color3.fromRGB(35,35,45), 0, "    "..tostring(v), THEME.TEXT_DIM, Enum.Font.Gotham, 12, 0
+        ib.MouseButton1Click:Connect(function() l.Text = "  "..t..": "..tostring(v) tween(f,{Size=UDim2.new(1,0,0,40)},0.2) c(v) end)
     end
-
-    trigger.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            update(i)
-        end
-    end)
-
-    UserInputService.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(i)
-        if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
-            update(i)
-        end
-    end)
-    return {Set = function(v)
-        local rel = math.clamp((v - min) / (max - min), 0, 1)
-        l.Text = text .. ": " .. formatVal(v)
-        fill.Size = UDim2.new(rel, 0, 1, 0)
-        btn.Position = UDim2.new(rel, -7, 0.5, -7)
-    end}
+    local op = false l.MouseButton1Click:Connect(function() op = not op tween(f,{Size=UDim2.new(1,0,0,op and (40+#is*30) or 40)},0.2) end)
+    return {Set = function(v) l.Text = "  "..t..": "..tostring(v) end}
 end
-
-local function addInput(parent, text, default, placeholder, callback)
-    local f = Instance.new("Frame", parent)
-    f.Size = UDim2.new(1, 0, 0, 55)
-    f.BackgroundColor3 = THEME.BG_CONTENT
-    corner(f, 6)
-    
-    local l = Instance.new("TextLabel", f)
-    l.Size = UDim2.new(1, -20, 0, 25)
-    l.Position = UDim2.new(0, 12, 0, 5)
-    l.BackgroundTransparency = 1
-    l.Text = text
-    l.TextColor3 = THEME.TEXT
-    l.Font = Enum.Font.Gotham
-    l.TextSize = 13
-    l.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local inp = Instance.new("TextBox", f)
-    inp.Size = UDim2.new(1, -24, 0, 24)
-    inp.Position = UDim2.new(0, 12, 0, 26)
-    inp.BackgroundColor3 = THEME.BG_MAIN
-    inp.Text = default
-    inp.PlaceholderText = placeholder
-    inp.TextColor3 = THEME.TEXT
-    inp.Font = Enum.Font.Gotham
-    inp.TextSize = 12
-    inp.ClearTextOnFocus = false
-    corner(inp, 4)
-    inp.FocusLost:Connect(function() callback(inp.Text) end)
-    return inp
-end
-
-local function addButton(parent, text, color, callback)
-    local btn = Instance.new("TextButton", parent)
-    btn.Size = UDim2.new(1, 0, 0, 36)
-    btn.BackgroundColor3 = color or THEME.DARK_ITEM
-    btn.Text = text
-    btn.TextColor3 = THEME.TEXT
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 13
-    corner(btn, 6)
-    btn.MouseButton1Click:Connect(function()
-        tween(btn, {BackgroundTransparency = 0.5}, 0.1)
-        task.wait(0.1)
-        tween(btn, {BackgroundTransparency = 0}, 0.1)
-        callback()
-    end)
-    return btn
-end
-
-local function addDropdown(parent, text, items, default, callback)
-    local f = Instance.new("Frame", parent)
-    f.Size = UDim2.new(1, 0, 0, 40)
-    f.BackgroundColor3 = THEME.BG_CONTENT
-    f.ClipsDescendants = true
-    corner(f, 6)
-    
-    local l = Instance.new("TextButton", f)
-    l.Size = UDim2.new(1, 0, 0, 40)
-    l.BackgroundTransparency = 1
-    l.Text = "  "..text .. ": " .. default
-    l.TextColor3 = THEME.TEXT
-    l.Font = Enum.Font.Gotham
-    l.TextSize = 13
-    l.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local list = Instance.new("Frame", f)
-    list.Size = UDim2.new(1, 0, 0, #items * 30)
-    list.Position = UDim2.new(0, 0, 0, 40)
-    list.BackgroundTransparency = 1
-    Instance.new("UIListLayout", list)
-    
-    for _, item in items do
-        local ib = Instance.new("TextButton", list)
-        ib.Size = UDim2.new(1, 0, 0, 30)
-        ib.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-        ib.BorderSizePixel = 0
-        ib.Text = "    " .. tostring(item)
-        ib.TextColor3 = THEME.TEXT_DIM
-        ib.Font = Enum.Font.Gotham
-        ib.TextSize = 12
-        ib.TextXAlignment = Enum.TextXAlignment.Left
-        ib.MouseButton1Click:Connect(function()
-            l.Text = "  "..text .. ": " .. tostring(item)
-            tween(f, {Size = UDim2.new(1, 0, 0, 40)}, 0.2)
-            callback(item)
-        end)
-    end
-    
-    local open = false
-    l.MouseButton1Click:Connect(function()
-        open = not open
-        tween(f, {Size = UDim2.new(1, 0, 0, open and (40 + #items * 30) or 40)}, 0.2)
-    end)
-    return {Set = function(v) l.Text = "  "..text .. ": " .. tostring(v) end}
-end
-
-local function addCollapsible(parent, title)
-    local container = Instance.new("Frame", parent)
-    container.Size = UDim2.new(1, 0, 0, 36)
-    container.BackgroundColor3 = THEME.BG_CONTENT
-    container.ClipsDescendants = true
-    container.BorderSizePixel = 0
-    corner(container, 6)
-    
-    local btn = Instance.new("TextButton", container)
-    btn.Size = UDim2.new(1, 0, 0, 36)
-    btn.BackgroundTransparency = 1
-    btn.Text = "  " .. title .. " ▼"
-    btn.TextColor3 = THEME.TEXT
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 12
-    btn.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local content = Instance.new("Frame", container)
-    content.Position = UDim2.new(0, 0, 0, 36)
-    content.Size = UDim2.new(1, 0, 0, 0)
-    content.BackgroundTransparency = 1
-    local layout = Instance.new("UIListLayout", content)
-    layout.Padding = UDim.new(0, 4)
-    
-    local open = false
-    btn.MouseButton1Click:Connect(function()
-        open = not open
-        local targetH = 36
-        if open then targetH = 36 + layout.AbsoluteContentSize.Y + 8 end
-        tween(container, {Size = UDim2.new(1, 0, 0, targetH)}, 0.3)
-        btn.Text = "  " .. title .. (open and " ▲" or " ▼")
-        tween(btn, {TextColor3 = open and THEME.ACCENT or THEME.TEXT}, 0.2)
-    end)
-    
-    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        if open then container.Size = UDim2.new(1, 0, 0, 36 + layout.AbsoluteContentSize.Y + 8) end
-    end)
-    return content
+local function addCollapsible(p, ti)
+    local c = Instance.new("Frame", p) c.Size, c.BackgroundColor3, c.ClipsDescendants, c.BorderSizePixel = UDim2.new(1,0,0,36), THEME.BG_CONTENT, true, 0 corner(c,6)
+    local b = Instance.new("TextButton", c) b.Size, b.BackgroundTransparency, b.Text, b.TextColor3, b.Font, b.TextSize, b.TextXAlignment = UDim2.new(1,0,0,36), 1, "  "..ti.." ▼", THEME.TEXT, Enum.Font.GothamBold, 12, 0
+    local con = Instance.new("Frame", c) con.Position, con.Size, con.BackgroundTransparency = UDim2.new(0,0,0,36), UDim2.new(1,0,0,0), 1 local ly = Instance.new("UIListLayout", con) ly.Padding = UDim.new(0,4)
+    local op = false b.MouseButton1Click:Connect(function() op = not op local h = op and (36+ly.AbsoluteContentSize.Y+8) or 36 tween(c,{Size=UDim2.new(1,0,0,h)},0.3) b.Text, b.TextColor3 = "  "..ti..(op and " ▲" or " ▼"), op and THEME.ACCENT or THEME.TEXT end)
+    ly:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() if op then c.Size = UDim2.new(1,0,0,36+ly.AbsoluteContentSize.Y+8) end end) return con
 end
 
 -- HITBOX LOGIC
-local function saveOriginal(part)
-    if not originalProperties[part] then
-        originalProperties[part] = {
-            Size = part.Size, Transparency = part.Transparency, CanCollide = part.CanCollide,
-            Color = part.Color, Material = part.Material
-        }
+local function saveOriginal(p) if not originalProperties[p] then originalProperties[p] = {Size=p.Size, Transparency=p.Transparency, CanCollide=p.CanCollide, Color=p.Color, Material=p.Material} end end
+local function applyHitbox(p, s, sh, c) if p.Size ~= Vector3.new(s,s,s) then p.Size = Vector3.new(s,s,s) end p.Transparency, p.CanCollide = sh and 0.5 or 1, false if sh then p.Color, p.Material = c, Enum.Material.ForceField end end
+local function restoreHitbox(p) if originalProperties[p] then local o = originalProperties[p] p.Size, p.Transparency, p.CanCollide, p.Color, p.Material = o.Size, o.Transparency, o.CanCollide, o.Color, o.Material end end
+local function expandHitbox(tt)
+    if tt == "self" then if not char then return end for n,e in selectedBodyParts.self do if e then local p = char:FindFirstChild(n) if p and p:IsA("BasePart") then saveOriginal(p) applyHitbox(p, hitboxSize.self, showHitbox.self, Color3.new(0,1,0)) end end end
+    elseif tt == "others" then for _,p in Players:GetPlayers() do if p ~= player and p.Character then for n,e in selectedBodyParts.others do if e then local pt = p.Character:FindFirstChild(n) if pt and pt:IsA("BasePart") then saveOriginal(pt) applyHitbox(pt, hitboxSize.others, showHitbox.others, Color3.new(1,0,0)) end end end end end
+    elseif tt == "mob" then
+        if tick() - (mobCache.lastScan or 0) > (isMobile and 1.5 or 1) then mobCache.lastScan = tick() mobCache.list = {} pcall(function() local c = game for s in string.gmatch(mobPath, "[^%.]+") do c = c:FindFirstChild(s) or c:WaitForChild(s, 1) end for _,d in c:GetDescendants() do if d:IsA("Model") and d:FindFirstChildOfClass("Humanoid") then table.insert(mobCache.list, d) end end end) end
+        for _,m in mobCache.list do if m.Parent and m:FindFirstChildOfClass("Humanoid") and m:FindFirstChildOfClass("Humanoid").Health > 0 then for n,e in selectedBodyParts.mob do if e then local pt = m:FindFirstChild(n) if pt and pt:IsA("BasePart") then saveOriginal(pt) applyHitbox(pt, hitboxSize.mob, showHitbox.mob, Color3.new(1,0.65,0)) end end end end end
     end
 end
-
-local function applyHitbox(part, size, show, color)
-    if part.Size ~= Vector3.new(size, size, size) then part.Size = Vector3.new(size, size, size) end
-    part.Transparency = show and 0.5 or 1
-    part.CanCollide = false
-    if show then part.Color = color part.Material = Enum.Material.ForceField end
-end
-
-local function restoreHitbox(part)
-    if originalProperties[part] then
-        local p = originalProperties[part]
-        part.Size = p.Size part.Transparency = p.Transparency part.CanCollide = p.CanCollide
-        part.Color = p.Color part.Material = p.Material
-    end
-end
-
-local function expandHitbox(tabType: string)
-    if tabType == "self" then
-        if not char or not char.Parent then return end
-        for partName, enabled in selectedBodyParts.self do
-            if enabled then
-                local part = char:FindFirstChild(partName)
-                if part and part:IsA("BasePart") then saveOriginal(part) applyHitbox(part, hitboxSize.self, showHitbox.self, Color3.fromRGB(0, 255, 0)) end
-            end
-        end
-    elseif tabType == "others" then
-        for _, p in Players:GetPlayers() do
-            if p ~= player and p.Character then
-                for partName, enabled in selectedBodyParts.others do
-                    if enabled then
-                        local part = p.Character:FindFirstChild(partName)
-                        if part and part:IsA("BasePart") then saveOriginal(part) applyHitbox(part, hitboxSize.others, showHitbox.others, Color3.fromRGB(255, 0, 0)) end
-                    end
-                end
-            end
-        end
-    elseif tabType == "mob" then
-        if tick() - (mobCache.lastScan or 0) > (isMobile and 1.5 or 1) then
-            mobCache.lastScan = tick()
-            mobCache.list = {}
-            local success, target = pcall(function()
-                local c = game
-                for seg in string.gmatch(mobPath, "[^%.]+") do c = c:FindFirstChild(seg) or c:WaitForChild(seg, 1) end
-                return c
-            end)
-            if success and target then
-                for _, desc in target:GetDescendants() do
-                    if desc:IsA("Model") and desc:FindFirstChildOfClass("Humanoid") then
-                        table.insert(mobCache.list, desc)
-                    end
-                end
-            end
-        end
-        for _, mob in (mobCache.list or {}) do
-            if mob.Parent and mob:FindFirstChildOfClass("Humanoid") and mob:FindFirstChildOfClass("Humanoid").Health > 0 then
-                for partName, enabled in selectedBodyParts.mob do
-                    if enabled then
-                        local part = mob:FindFirstChild(partName)
-                        if part and part:IsA("BasePart") then saveOriginal(part) applyHitbox(part, hitboxSize.mob, showHitbox.mob, Color3.fromRGB(255, 165, 0)) end
-                    end
-                end
-            end
-        end
-    end
-end
-
-local function disableHitbox(tabType: string)
-    if tabType == "self" then
-        if not char then return end
-        for partName, _ in selectedBodyParts.self do
-            local part = char:FindFirstChild(partName)
-            if part then restoreHitbox(part) end
-        end
-    elseif tabType == "others" then
-        for _, p in Players:GetPlayers() do
-            if p.Character then
-                for partName, _ in selectedBodyParts.others do
-                    local part = p.Character:FindFirstChild(partName)
-                    if part then restoreHitbox(part) end
-                end
-            end
-        end
-    elseif tabType == "mob" then
-        local success, target = pcall(function()
-            local c = game
-            for seg in string.gmatch(mobPath, "[^%.]+") do c = c:FindFirstChild(seg) or c:WaitForChild(seg, 1) end
-            return c
-        end)
-        if success and target then
-            for _, desc in target:GetDescendants() do
-                if desc:IsA("Model") then
-                    for partName, _ in selectedBodyParts.mob do
-                        local part = desc:FindFirstChild(partName)
-                        if part then restoreHitbox(part) end
-                    end
-                end
-            end
-        end
-    end
+local function disableHitbox(tt)
+    if tt == "self" then if char then for n,_ in selectedBodyParts.self do local p = char:FindFirstChild(n) if p then restoreHitbox(p) end end end
+    elseif tt == "others" then for _,p in Players:GetPlayers() do if p.Character then for n,_ in selectedBodyParts.others do local pt = p.Character:FindFirstChild(n) if pt then restoreHitbox(pt) end end end end
+    elseif tt == "mob" then pcall(function() local c = game for s in string.gmatch(mobPath, "[^%.]+") do c = c:FindFirstChild(s) or c:WaitForChild(s, 1) end for _,d in c:GetDescendants() do if d:IsA("Model") then for n,_ in selectedBodyParts.mob do local pt = d:FindFirstChild(n) if pt then restoreHitbox(pt) end end end end end) end
 end
 
 -- COMBAT LOGIC
@@ -1106,10 +631,75 @@ ui_controls.autoChest = addToggle(secretIslandList, "Enabled Auto Chest", false,
 ui_controls.autoChestStyle = addDropdown(secretIslandList, "Chest Style", {"TP", "Tween"}, "Tween", function(v) autoChestStyle = v end)
 ui_controls.autoChestType = addDropdown(secretIslandList, "Chest Type", {"All", "Fragment", "Mirage"}, "All", function(v) autoChestType = v end)
 
--- HEARTBEAT ENGINE
-local cache = { mirage = nil, chest = nil, lastScan = 0, boatTarget = nil, boatParts = {}, touchedChests = {}, lastLootTime = 0 }
+-- HEARTBEAT
+local cache = { mirage = nil, chest = nil, lastScan = 0, boatTarget = nil, boatParts = {}, touchedChests = {}, lastLootTime = 0, dState = "", dTick = 0 }
 
 RunService.Heartbeat:Connect(function(dt: number)
+    local myChar = player.Character
+    local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+
+    -- AUTO DUNGEON
+    if autoDungeonEnabled and myHRP then
+        local dungeonTargetPos = nil
+        
+        local dungeonMap = workspace.Map:FindFirstChild("Dungeon")
+        if dungeonMap then
+            local names = {} for _,v in dungeonMap:GetChildren() do table.insert(names, v.Name) end
+            local curState = table.concat(names, ",")
+            if curState ~= cache.dState then cache.dState, cache.dTick = curState, tick() end
+            
+            if tick() - cache.dTick < 2 then
+                for _, roomFolder in dungeonMap:GetChildren() do
+                    local exitPortal = roomFolder:FindFirstChild("ExitTeleporter") or roomFolder:FindFirstChild("ExitTeleport")
+                    local rootPart = exitPortal and exitPortal:FindFirstChild("Root")
+                    if rootPart then pcall(function() firetouchinterest(myHRP, rootPart, 0) firetouchinterest(myHRP, rootPart, 1) end) end
+                end
+            end
+        end
+
+        local baseHeight = 13 
+        if myHRP.Size.Y > 2 then
+            baseHeight = baseHeight + (myHRP.Size.Y * 1.5)
+        elseif hitboxEnabled.self then
+            baseHeight = baseHeight + (hitboxSize.self * 0.8)
+        end
+
+        local enemiesFolder = workspace:FindFirstChild("Enemies")
+        local enemies = enemiesFolder and enemiesFolder:GetChildren() or {}
+        local nearestDist = math.huge
+        
+        for _, e in enemies do
+            local eHRP = e:FindFirstChild("HumanoidRootPart")
+            if eHRP then
+                local name = e.Name:lower()
+                local isAlly = name:find("shadow") or name:find("blank") or name:find("buddy")
+                if not isAlly then
+                    local eHum = e:FindFirstChildOfClass("Humanoid")
+                    if eHum and eHum.Health > 0 then
+                        local d = (myHRP.Position - eHRP.Position).Magnitude
+                        if d < nearestDist then
+                            nearestDist = d
+                            dungeonTargetPos = eHRP.Position + Vector3.new(0, baseHeight, 0)
+                        end
+                    end
+                end
+            end
+        end
+        if dungeonTargetPos then
+            for _, v in char:GetDescendants() do if v:IsA("BasePart") then v.CanCollide = false end end
+            myHRP.Velocity = Vector3.new(0,0,0)
+            local dist = (myHRP.Position - dungeonTargetPos).Magnitude
+            if dist > 0.1 then
+                local spd = (dist < 5) and 150 or 350
+                local alpha = math.min((spd * dt) / dist, 1)
+                local lookAt = Vector3.new(dungeonTargetPos.X, myHRP.Position.Y, dungeonTargetPos.Z)
+                if (lookAt - myHRP.Position).Magnitude < 0.5 then lookAt = myHRP.Position + myHRP.CFrame.LookVector end
+                local targetCF = CFrame.new(myHRP.Position, lookAt) * CFrame.new(0, 0, -dist) * CFrame.new(0, dungeonTargetPos.Y - myHRP.Position.Y, 0)
+                myHRP.CFrame = myHRP.CFrame:Lerp(targetCF, alpha)
+            end
+        else myHRP.Velocity = Vector3.zero end
+    end
+
     -- Hitbox & Combat
     for t, e in hitboxEnabled do if e then expandHitbox(t) end end
     if fastM1Enabled then applyFastM1() end
@@ -1286,6 +876,23 @@ ui_controls.waterWalk = addToggle(lpList, "Water Walk", true, function(v) waterW
 ui_controls.antiWater = addToggle(lpList, "Anti Water", true, function(v) antiWaterEnabled = v end)
 
 local fruitSection = addCollapsible(TabBlox, "Fruit")
+local function storeAllFruits()
+    if not char then return end
+    local items = {}
+    for _, v in player.Backpack:GetChildren() do table.insert(items, v) end
+    for _, v in char:GetChildren() do table.insert(items, v) end
+    
+    for _, item in items do
+        if item:IsA("Tool") and item.Name:lower():find("fruit") then
+            -- Loại bỏ chữ " Fruit" và các khoảng trắng dư thừa
+            local baseName = item.Name:gsub(" Fruit", ""):gsub(" ", "")
+            local formattedName = baseName .. "-" .. baseName
+            pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("StoreFruit", formattedName, item) end)
+        end
+    end
+end
+ui_controls.autoStoreFruit = addToggle(fruitSection, "Auto Store Fruit", false, function(v) autoStoreFruitEnabled = v end)
+addButton(fruitSection, "Store All Fruits (1 Click)", THEME.ACCENT, function() storeAllFruits() end)
 ui_controls.autoRandomFruit = addToggle(fruitSection, "Auto Random Fruit", false, function(v) autoRandomFruitEnabled = v end)
 addButton(fruitSection, "Random Fruit (1 Click)", THEME.ACCENT, function() pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("Cousin", "Buy", "DLCBoxData") end) end)
 
@@ -1405,6 +1012,11 @@ helpLabel.Text = "📖 Hướng dẫn lấy ID:\n1. Mở Roblox Website > Create
 helpLabel.TextColor3 = THEME.TEXT_DIM helpLabel.Font = Enum.Font.Gotham helpLabel.TextSize = 11
 helpLabel.TextWrapped = true
 
+-- Xóa hàm getDungeonTeleporter cũ vì đã dùng logic FireTouch toàn bộ
+
+local dungeonSection = addCollapsible(TabBlox, "Dungeon")
+ui_controls.autoDungeon = addToggle(dungeonSection, "Auto Dungeon", false, function(v) autoDungeonEnabled = v end)
+
 addInput(customIconList, "Icon Button ID", "84053545044369", "Dán ID số vào đây...", function(v)
     local idOnly = v:match("%d+")
     if idOnly then
@@ -1415,11 +1027,33 @@ end)
 task.spawn(function() while task.wait(0.5) do updateBoatSpeeds() end end)
 task.spawn(function() while task.wait(1) do if autoRaceV3Enabled then pcall(function() ReplicatedStorage.Remotes.CommE:FireServer("ActivateAbility") end) end end end)
 task.spawn(function() while task.wait(10) do if autoRandomFruitEnabled then pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("Cousin", "Buy", "DLCBoxData") end) end end end)
-task.spawn(function() while task.wait(1) do if autoActiveV4Enabled then pcall(function() local a = player.Backpack:FindFirstChild("Awakening") or char:FindFirstChild("Awakening") if a then a.RemoteFunction:InvokeServer(true) end end) end end end)
+task.spawn(function()
+    while true do
+        task.wait(0.5) -- 0.5s là đủ nhanh và an toàn
+        if autoActiveV4Enabled then
+            pcall(function()
+                local character = player.Character
+                if character then
+                    local awakening = player.Backpack:FindFirstChild("Awakening") or character:FindFirstChild("Awakening")
+                    if awakening then
+                        local rf = awakening:FindFirstChild("RemoteFunction", true)
+                        if rf then
+                            -- Dùng task.spawn để tránh việc InvokeServer làm đứng loop
+                            task.spawn(function()
+                                pcall(function() rf:InvokeServer(true) end)
+                            end)
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
 task.spawn(function() while task.wait(2) do if autoTradeBonesEnabled then pcall(function() ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("Bones", "Buy", 1, 1) end) end end end)
+task.spawn(function() while task.wait(1) do if autoStoreFruitEnabled then storeAllFruits() end end end)
 
 
--- [[ INITIALIZE ]]
+-- INITIALIZE
 if #tabBtns > 0 then
     for _, p in pages do p.Visible = false end
     for _, b in tabBtns do b.BackgroundTransparency = 1; b.TextColor3 = THEME.TEXT_DIM end
