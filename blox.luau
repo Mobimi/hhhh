@@ -23,8 +23,6 @@ local autoChestMirage, autoChestStyle, autoChestType, autoActiveV4Enabled, autoT
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 local baseScanInterval = isMobile and 0.8 or 0.5
 local scanInterval, espInterval = baseScanInterval, isMobile and 1.0 or 0.5
-local THEME = {BG_MAIN = Color3.fromRGB(15,15,20), BG_SIDE = Color3.fromRGB(22,22,28), BG_CONTENT = Color3.fromRGB(26,26,32), ACCENT = Color3.fromRGB(255,30,60), TEXT = Color3.fromRGB(255,255,255), TEXT_DIM = Color3.fromRGB(160,160,160), GREEN = Color3.fromRGB(60,230,120), RED = Color3.fromRGB(255,80,80), DARK_ITEM = Color3.fromRGB(35,35,45)}
-
 local THEME = {
     BG_MAIN = Color3.fromRGB(15, 15, 20),
     BG_SIDE = Color3.fromRGB(22, 22, 28),
@@ -135,7 +133,7 @@ local function addCollapsible(p, ti)
     ly:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() if op then c.Size = UDim2.new(1,0,0,36+ly.AbsoluteContentSize.Y+8) end end) return con
 end
 
--- HITBOX LOGIC
+-- Logic
 local function saveOriginal(p) if not originalProperties[p] then originalProperties[p] = {Size=p.Size, Transparency=p.Transparency, CanCollide=p.CanCollide, Color=p.Color, Material=p.Material} end end
 local function applyHitbox(p, s, sh, c) if p.Size ~= Vector3.new(s,s,s) then p.Size = Vector3.new(s,s,s) end p.Transparency, p.CanCollide = sh and 0.5 or 1, false if sh then p.Color, p.Material = c, Enum.Material.ForceField end end
 local function restoreHitbox(p) if originalProperties[p] then local o = originalProperties[p] p.Size, p.Transparency, p.CanCollide, p.Color, p.Material = o.Size, o.Transparency, o.CanCollide, o.Color, o.Material end end
@@ -153,7 +151,6 @@ local function disableHitbox(tt)
     elseif tt == "mob" then pcall(function() local c = game for s in string.gmatch(mobPath, "[^%.]+") do c = c:FindFirstChild(s) or c:WaitForChild(s, 1) end for _,d in c:GetDescendants() do if d:IsA("Model") then for n,_ in selectedBodyParts.mob do local pt = d:FindFirstChild(n) if pt then restoreHitbox(pt) end end end end end) end
 end
 
--- COMBAT LOGIC
 local function generateID()
     local chars, id = "0123456789abcdef", ""
     for i = 1, 8 do local r = math.random(1, 16) id = id .. chars:sub(r, r) end
@@ -276,7 +273,6 @@ local function spamFruit()
     for i = 1, 5 do if selectedAttacks[i] then pcall(function() remote:FireServer(dir, i, true) end) end end
 end
 
--- SEA LOGIC
 local boatStatusLabel
 local function updateBoatSpeeds()
     if not workspace:FindFirstChild("Boats") then 
@@ -294,7 +290,6 @@ local function updateBoatSpeeds()
     end
 end
 
--- ESP LOGIC
 local function clearESP() for _, b in pairs(espBillboards) do if b then b:Destroy() end end espBillboards = {} end
 
 local function updateESP()
@@ -351,7 +346,6 @@ local function updateESP()
     for p, b in espBillboards do if not p or not p.Parent or not p.Character then if b then b:Destroy() end espBillboards[p] = nil end end
 end
 
--- SERVER HOPPER
 local hopStatusLabel, lastHopTime, HOP_COOLDOWN, hoppedServers = nil, 0, 10, {}
 
 local function findTargetServer()
@@ -463,7 +457,6 @@ local function executeHop()
     end)
 end
 
--- ISLAND ESP
 local function findIsland(islandName)
     local map = workspace:FindFirstChild("Map")
     if not map then return nil end
@@ -531,7 +524,6 @@ local function updateIslandESP()
     for obj, b in islandEspBillboards do if not currentActive[obj] then if b then b:Destroy() end islandEspBillboards[obj] = nil end end
 end
 
--- TABS
 local TabHitbox = createTab("j4f")
 local TabBlox = createTab("Blox Fruit")
 local TabUtils = createTab("Utils")
@@ -614,73 +606,121 @@ ui_controls.autoChest = addToggle(secretIslandList, "Enabled Auto Chest", false,
 ui_controls.autoChestStyle = addDropdown(secretIslandList, "Chest Style", {"TP", "Tween"}, "Tween", function(v) autoChestStyle = v end)
 ui_controls.autoChestType = addDropdown(secretIslandList, "Chest Type", {"All", "Fragment", "Mirage"}, "All", function(v) autoChestType = v end)
 
--- HEARTBEAT
-local cache = { mirage = nil, chest = nil, lastScan = 0, boatTarget = nil, boatParts = {}, touchedChests = {}, lastLootTime = 0, dState = "", dTick = 0 }
+local cache = { mirage = nil, chest = nil, lastScan = 0, boatTarget = nil, boatParts = {}, touchedChests = {}, lastLootTime = 0, dState = "", dTick = 0, lastDeath = 0 }
+local function setupDeathListener(c)
+    local hum = c:WaitForChild("Humanoid", 10)
+    if hum then hum.Died:Connect(function() cache.lastDeath = tick() end) end
+end
+player.CharacterAdded:Connect(setupDeathListener)
+if player.Character then setupDeathListener(player.Character) end
+
+local dungeonCache = {
+    charParts = {},
+    lastPartsCached = 0,
+    baseHeight = 13,
+    lastHeightCalc = 0,
+    stuckTimer = 0,
+    lastPosition = nil,
+    mapChildCount = 0
+}
 
 RunService.Heartbeat:Connect(function(dt: number)
     local myChar = player.Character
     local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
 
-    -- AUTO DUNGEON
     if autoDungeonEnabled and myHRP then
-        local dungeonTargetPos = nil
-        
-        local dungeonMap = workspace.Map:FindFirstChild("Dungeon")
-        if dungeonMap then
-            local names = {} for _,v in dungeonMap:GetChildren() do table.insert(names, v.Name) end
-            local curState = table.concat(names, ",")
-            if curState ~= cache.dState then cache.dState, cache.dTick = curState, tick() end
+        pcall(function()
+            local dungeonTargetPos = nil
+            local dungeonMap = workspace.Map:FindFirstChild("Dungeon")
+            local enemiesFolder = workspace:FindFirstChild("Enemies")
+            local enemies = enemiesFolder and enemiesFolder:GetChildren() or {}
             
-            if tick() - cache.dTick < 2 then
-                for _, roomFolder in dungeonMap:GetChildren() do
-                    local exitPortal = roomFolder:FindFirstChild("ExitTeleporter") or roomFolder:FindFirstChild("ExitTeleport")
-                    local rootPart = exitPortal and exitPortal:FindFirstChild("Root")
-                    if rootPart then pcall(function() firetouchinterest(myHRP, rootPart, 0) firetouchinterest(myHRP, rootPart, 1) end) end
-                end
-            end
-        end
-
-        local baseHeight = 13 
-        if myHRP.Size.Y > 2 then
-            baseHeight = baseHeight + (myHRP.Size.Y * 1.5)
-        elseif hitboxEnabled.self then
-            baseHeight = baseHeight + (hitboxSize.self * 0.8)
-        end
-
-        local enemiesFolder = workspace:FindFirstChild("Enemies")
-        local enemies = enemiesFolder and enemiesFolder:GetChildren() or {}
-        local nearestDist = math.huge
-        
-        for _, e in enemies do
-            local eHRP = e:FindFirstChild("HumanoidRootPart")
-            if eHRP then
-                local name = e.Name:lower()
-                local isAlly = name:find("shadow") or name:find("blank") or name:find("buddy")
-                if not isAlly then
-                    local eHum = e:FindFirstChildOfClass("Humanoid")
-                    if eHum and eHum.Health > 0 then
-                        local d = (myHRP.Position - eHRP.Position).Magnitude
-                        if d < nearestDist then
-                            nearestDist = d
-                            dungeonTargetPos = eHRP.Position + Vector3.new(0, baseHeight, 0)
-                        end
+            local function spamAllPortals()
+                if dungeonMap then
+                    for _, room in dungeonMap:GetChildren() do
+                        local portal = room:FindFirstChild("ExitTeleporter") or room:FindFirstChild("ExitTeleport")
+                        local root = portal and portal:FindFirstChild("Root")
+                        if root then pcall(function() firetouchinterest(myHRP, root, 0) firetouchinterest(myHRP, root, 1) end) end
                     end
                 end
             end
-        end
-        if dungeonTargetPos then
-            for _, v in char:GetDescendants() do if v:IsA("BasePart") then v.CanCollide = false end end
-            myHRP.Velocity = Vector3.new(0,0,0)
-            local dist = (myHRP.Position - dungeonTargetPos).Magnitude
-            if dist > 0.1 then
-                local spd = (dist < 5) and 150 or 350
-                local alpha = math.min((spd * dt) / dist, 1)
-                local lookAt = Vector3.new(dungeonTargetPos.X, myHRP.Position.Y, dungeonTargetPos.Z)
-                if (lookAt - myHRP.Position).Magnitude < 0.5 then lookAt = myHRP.Position + myHRP.CFrame.LookVector end
-                local targetCF = CFrame.new(myHRP.Position, lookAt) * CFrame.new(0, 0, -dist) * CFrame.new(0, dungeonTargetPos.Y - myHRP.Position.Y, 0)
-                myHRP.CFrame = myHRP.CFrame:Lerp(targetCF, alpha)
+
+            local shouldSpamPortal = (tick() - cache.lastDeath < 5)
+            local childCount = dungeonMap and #dungeonMap:GetChildren() or 0
+            if childCount ~= dungeonCache.mapChildCount then
+                dungeonCache.mapChildCount = childCount
+                cache.dTick = tick()
             end
-        else myHRP.Velocity = Vector3.zero end
+            if shouldSpamPortal or (tick() - cache.dTick < 2) then
+                spamAllPortals()
+            end
+
+            if tick() - dungeonCache.lastHeightCalc > 1 then
+                dungeonCache.baseHeight = 13
+                if myHRP.Size.Y > 2 then dungeonCache.baseHeight = dungeonCache.baseHeight + (myHRP.Size.Y * 1.5)
+                elseif hitboxEnabled.self then dungeonCache.baseHeight = dungeonCache.baseHeight + (hitboxSize.self * 0.8) end
+                dungeonCache.lastHeightCalc = tick()
+            end
+            local baseHeight = dungeonCache.baseHeight
+
+            local nearestDist, bestTarget = math.huge, nil
+            for _, e in enemies do
+                local eHRP = e:FindFirstChild("HumanoidRootPart")
+                local eHum = e:FindFirstChildOfClass("Humanoid")
+                if eHRP and eHum and eHum.Health > 0 then
+                    local name = e.Name:lower()
+                    local isPriority = (e.Name == "PropHitboxPlaceholder")
+                    local isAlly = name:find("shadow") or name:find("blank") or name:find("buddy")
+                    if not isAlly then
+                        local d = (myHRP.Position - eHRP.Position).Magnitude
+                        local score = isPriority and 0 or d
+                        if score < nearestDist then
+                            nearestDist = score
+                            bestTarget = eHRP
+                        end
+                        if isPriority then break end
+                    end
+                end
+            end
+            if bestTarget then dungeonTargetPos = bestTarget.Position + Vector3.new(0, baseHeight, 0) end
+
+            if not dungeonTargetPos then
+                spamAllPortals()
+            end
+
+            if dungeonTargetPos then
+                if tick() - dungeonCache.lastPartsCached > 2 then
+                    dungeonCache.charParts = {}
+                    for _, v in char:GetDescendants() do if v:IsA("BasePart") then table.insert(dungeonCache.charParts, v) end end
+                    dungeonCache.lastPartsCached = tick()
+                end
+                for _, v in dungeonCache.charParts do if v.CanCollide then v.CanCollide = false end end
+                
+                myHRP.Velocity = Vector3.zero
+                local dist = (myHRP.Position - dungeonTargetPos).Magnitude
+                
+                if dungeonCache.lastPosition and (myHRP.Position - dungeonCache.lastPosition).Magnitude < 0.5 then
+                    dungeonCache.stuckTimer = dungeonCache.stuckTimer + dt
+                    if dungeonCache.stuckTimer > 3 then
+                        spamAllPortals()
+                        dungeonCache.stuckTimer = 0
+                    end
+                else dungeonCache.stuckTimer = 0 end
+                dungeonCache.lastPosition = myHRP.Position
+                
+                if dist > 0.1 then
+                    local spd = (dist < 5) and 150 or (dist < 25 and 450 or 350)
+                    local alpha = math.clamp((spd * dt) / dist, 0, 0.8)
+                    local lookAt = Vector3.new(dungeonTargetPos.X, myHRP.Position.Y, dungeonTargetPos.Z)
+                    if (lookAt - myHRP.Position).Magnitude < 0.5 then lookAt = myHRP.Position + myHRP.CFrame.LookVector end
+                    local targetCF = CFrame.new(myHRP.Position, lookAt) * CFrame.new(0, 0, -dist) * CFrame.new(0, dungeonTargetPos.Y - myHRP.Position.Y, 0)
+                    myHRP.CFrame = myHRP.CFrame:Lerp(targetCF, alpha)
+                end
+            else 
+                myHRP.Velocity = Vector3.zero 
+                spamAllPortals()
+            end
+        end)
     end
 
     -- Hitbox & Combat
@@ -975,20 +1015,11 @@ addButton(TabUtils, "Small Server Hop", THEME.ACCENT, function() executeHop() en
 addButton(TabUtils, "Old Server (4H+)", THEME.DARK_ITEM, function() hopToOldServer("4h") end)
 addButton(TabUtils, "Old Server (3H45+)", THEME.DARK_ITEM, function() hopToOldServer("3h45") end)
 
--- SETTINGS TAB
-
-
--- Logic Task Start
 local customIconList = addCollapsible(TabSettings, "Custom Button Icon")
-
 local helpLabel = Instance.new("TextLabel", customIconList)
-helpLabel.Size = UDim2.new(1, 0, 0, 80)
-helpLabel.BackgroundTransparency = 1
+helpLabel.Size, helpLabel.BackgroundTransparency = UDim2.new(1,0,0,80), 1
 helpLabel.Text = "📖 Hướng dẫn lấy ID:\n1. Mở Roblox Website > Create > Dashboard\n2. Chọn Development Items > Decals\n3. Copy dãy số (ID) của ảnh bạn muốn dán vào đây."
-helpLabel.TextColor3 = THEME.TEXT_DIM helpLabel.Font = Enum.Font.Gotham helpLabel.TextSize = 11
-helpLabel.TextWrapped = true
-
--- Xóa hàm getDungeonTeleporter cũ vì đã dùng logic FireTouch toàn bộ
+helpLabel.TextColor3, helpLabel.Font, helpLabel.TextSize, helpLabel.TextWrapped = THEME.TEXT_DIM, Enum.Font.Gotham, 11, true
 
 local dungeonSection = addCollapsible(TabBlox, "Dungeon")
 ui_controls.autoDungeon = addToggle(dungeonSection, "Auto Dungeon", false, function(v) autoDungeonEnabled = v end)
@@ -1005,7 +1036,7 @@ task.spawn(function() while task.wait(1) do if autoRaceV3Enabled then pcall(func
 task.spawn(function() while task.wait(10) do if autoRandomFruitEnabled then pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("Cousin", "Buy", "DLCBoxData") end) end end end)
 task.spawn(function()
     while true do
-        task.wait(0.5) -- 0.5s là đủ nhanh và an toàn
+        task.wait(0.5)
         if autoActiveV4Enabled then
             pcall(function()
                 local character = player.Character
@@ -1014,10 +1045,7 @@ task.spawn(function()
                     if awakening then
                         local rf = awakening:FindFirstChild("RemoteFunction", true)
                         if rf then
-                            -- Dùng task.spawn để tránh việc InvokeServer làm đứng loop
-                            task.spawn(function()
-                                pcall(function() rf:InvokeServer(true) end)
-                            end)
+                            task.spawn(function() pcall(function() rf:InvokeServer(true) end) end)
                         end
                     end
                 end
@@ -1029,7 +1057,6 @@ task.spawn(function() while task.wait(2) do if autoTradeBonesEnabled then pcall(
 task.spawn(function() while task.wait(1) do if autoStoreFruitEnabled then storeAllFruits() end end end)
 
 
--- INITIALIZE
 if #tabBtns > 0 then
     for _, p in pages do p.Visible = false end
     for _, b in tabBtns do b.BackgroundTransparency = 1; b.TextColor3 = THEME.TEXT_DIM end
