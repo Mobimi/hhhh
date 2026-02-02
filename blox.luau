@@ -2,6 +2,22 @@ local Players, RunService, UserInputService, CoreGui, ReplicatedStorage, TweenSe
 local player, currentTab, guiVisible = Players.LocalPlayer, 1, true
 local char = player.Character or player.CharacterAdded:Wait()
 player.CharacterAdded:Connect(function(c) char = c end)
+
+-- MOBILE COMPATIBILITY LAYER
+local _bit = bit32 or bit
+local _bxor = (_bit and _bit.bxor) or function(a, b) -- Fallback XOR
+    local res, m = 0, 1
+    while a > 0 or b > 0 do
+        if a % 2 ~= b % 2 then res = res + m end
+        a, b, m = math.floor(a / 2), math.floor(b / 2), m * 2
+    end
+    return res
+end
+local function getServerTime()
+    local success, time = pcall(function() return workspace:GetServerTimeNow() end)
+    return success and time or os.time()
+end
+
 local ui_controls, configFolder, configFileName, allStrokes, allBtnStrokes = {}, "j4f", "j4f/config_j4f.json", {}, {}
 local hitboxEnabled, hitboxSize, showHitbox = {self = false, others = false, mob = false}, {self = 10, others = 10, mob = 10}, {self = false, others = false, mob = false}
 local selectedBodyParts = {
@@ -12,6 +28,7 @@ local selectedBodyParts = {
 local mobPath, originalProperties, processedParts, mobCache = "workspace", {}, {}, {lastScan = 0, list = {}}
 local auraEnabled, auraRadius, auraDelay, lastHitTime, hitCount = false, 20, 0.01, 0, 0
 local attackRemote, hitRemote, auraConnection, isSpamming, spamConnection, fruitDelay, lastAttack = nil, nil, nil, false, nil, 0.01, 0
+local proxyRemote, seedVal, attackRemoteDirect, hitRemoteDirect = nil, nil, nil, nil
 local selectedAttacks, fastM1Enabled, fastMeleeMultiplier, fastFruitMultiplier = {true, true, true, true, true}, false, 1, 1
 local boatSpeed, tpEnabled, tpSpeed, autoRaceV3Enabled, infinityJumpEnabled = 200, false, 2, false, false
 local jumpHeightEnabled, jumpHeightValue, dashLengthValue, waterWalkEnabled, antiWaterEnabled, antiWaterThreshold = false, 7.2, 0, true, true, -0.807
@@ -55,7 +72,9 @@ local function refreshUI()
     end
 end
 
-local ScreenGui = Instance.new("ScreenGui", CoreGui) ScreenGui.Name, ScreenGui.ResetOnSpawn = "HB_PRO_V3", false
+local ScreenGui = Instance.new("ScreenGui") ScreenGui.Name, ScreenGui.ResetOnSpawn = "HB_PRO_V3", false
+pcall(function() ScreenGui.Parent = CoreGui end)
+if not ScreenGui.Parent then ScreenGui.Parent = player:WaitForChild("PlayerGui") end
 local ToggleBtn = Instance.new("ImageButton", ScreenGui) ToggleBtn.Size, ToggleBtn.Position, ToggleBtn.BackgroundColor3, ToggleBtn.BackgroundTransparency, ToggleBtn.Image, ToggleBtn.ScaleType, ToggleBtn.ZIndex = UDim2.new(0,60,0,60), UDim2.new(0.02,0,0.5,-30), THEME.BG_SIDE, 0.2, "rbxthumb://type=Asset&id=84053545044369&w=420&h=420", Enum.ScaleType.Fit, 15
 corner(ToggleBtn,12) stroke(ToggleBtn,THEME.ACCENT,2,true) makeDraggable(ToggleBtn)
 local MainFrame = Instance.new("Frame", ScreenGui) MainFrame.Name, MainFrame.Size, MainFrame.Position, MainFrame.BackgroundColor3, MainFrame.BorderSizePixel, MainFrame.ClipsDescendants = "MainFrame", UDim2.new(0,540,0,340), UDim2.new(0.5,-270,0.5,-170), THEME.BG_MAIN, 0, true
@@ -157,6 +176,58 @@ local function generateID()
     return id
 end
 
+local function encodeName(remoteName)
+    local serverTime = getServerTime()
+    local key = math.floor(serverTime / 10 % 10) + 1
+    local encoded = ""
+    for i = 1, #remoteName do
+        local b = string.byte(remoteName, i)
+        encoded = encoded .. string.char(_bxor(b, key))
+    end
+    return encoded
+end
+
+task.spawn(function()
+    while true do
+        pcall(function()
+            local folders = {"Util", "Remotes", "Assets", "Common", "FX"}
+            local found = false
+            for _, fName in folders do
+                local f = ReplicatedStorage:FindFirstChild(fName)
+                if f then
+                    for _, obj in f:GetChildren() do
+                        if obj:IsA("RemoteEvent") and tonumber(obj.Name) and obj:GetAttribute("Id") then
+                            proxyRemote = obj
+                            found = true
+                            break
+                        end
+                    end
+                end
+                if found then break end
+            end
+            local netMod = ReplicatedStorage:FindFirstChild("Modules")
+            if netMod and netMod:FindFirstChild("Net") then
+                local sRem = netMod.Net:FindFirstChild("seed")
+                if sRem and sRem:IsA("RemoteFunction") then
+                    local s = sRem:InvokeServer()
+                    if s then seedVal = tonumber(s) end
+                end
+                attackRemoteDirect = netMod.Net:FindFirstChild("RE/RegisterAttack")
+                hitRemoteDirect = netMod.Net:FindFirstChild("RE/RegisterHit")
+            end
+        end)
+        task.wait(5)
+    end
+end)
+
+local function getBodyPart(model)
+    local parts = {"RightUpperArm", "RightFoot", "RightHand", "LeftUpperArm", "HumanoidRootPart", "Torso"}
+    for _, name in parts do
+        local p = model:FindFirstChild(name)
+        if p and p:IsA("BasePart") then return p end
+    end
+    return model:FindFirstChildOfClass("BasePart")
+end
 local function getTargets(): {Model}
     local targets = {}
     if not char or not char:FindFirstChild("HumanoidRootPart") then return targets end
@@ -164,10 +235,11 @@ local function getTargets(): {Model}
     local enemies = workspace:FindFirstChild("Enemies")
     if enemies then
         for _, e in enemies:GetChildren() do
-            if e:IsA("Model") and e:FindFirstChild("HumanoidRootPart") then
-                local h = e:FindFirstChildOfClass("Humanoid")
-                if h and h.Health > 0 then
-                    local d = (myPos - e.HumanoidRootPart.Position).Magnitude
+            if e:IsA("Model") then
+                local eHRP = e:FindFirstChild("HumanoidRootPart")
+                local eHum = e:FindFirstChildOfClass("Humanoid")
+                if eHRP and eHum and eHum.Health > 0 then
+                    local d = (myPos - eHRP.Position).Magnitude
                     if d <= auraRadius then table.insert(targets, {model = e, dist = d}) end
                 end
             end
@@ -175,17 +247,18 @@ local function getTargets(): {Model}
     end
     for _, p in Players:GetPlayers() do
         if p ~= player and p.Character then
-            local pHrp = p.Character:FindFirstChild("HumanoidRootPart")
-            local pHum = p.Character:FindFirstChildOfClass("Humanoid")
-            if pHrp and pHum and pHum.Health > 0 then
-                local d = (myPos - pHrp.Position).Magnitude
-                if d <= auraRadius then table.insert(targets, {model = p.Character, dist = d}) end
+            local pChar = p.Character
+            local pHRP = pChar:FindFirstChild("HumanoidRootPart")
+            local pHum = pChar:FindFirstChildOfClass("Humanoid")
+            if pHRP and pHum and pHum.Health > 0 then
+                local d = (myPos - pHRP.Position).Magnitude
+                if d <= auraRadius then table.insert(targets, {model = pChar, dist = d}) end
             end
         end
     end
     table.sort(targets, function(a, b) return a.dist < b.dist end)
     local result = {}
-    for _, t in targets do table.insert(result, t.model) end
+    for _, t in ipairs(targets) do table.insert(result, t.model) end
     return result
 end
 
@@ -196,20 +269,32 @@ local function performHit()
     lastHitTime = now
     local targets = getTargets()
     if #targets == 0 then return end
-    if not attackRemote or not hitRemote then
-        pcall(function()
-            attackRemote = ReplicatedStorage.Modules.Net["RE/RegisterAttack"]
-            hitRemote = ReplicatedStorage.Modules.Net["RE/RegisterHit"]
-        end)
-        if not attackRemote or not hitRemote then return end
-    end
-    pcall(function() attackRemote:FireServer() end)
     local multiTargets, firstPart = {}, nil
-    for _, t in ipairs(targets) do
-        local p = t:FindFirstChild("HumanoidRootPart") or t:FindFirstChild("Torso")
-        if p then if not firstPart then firstPart = p end table.insert(multiTargets, {t, p}) end
+    for _, model in ipairs(targets) do
+        local part = getBodyPart(model)
+        if part then
+            if not firstPart then firstPart = part end
+            table.insert(multiTargets, {model, part})
+        end
     end
-    if firstPart and #multiTargets > 0 then pcall(function() hitRemote:FireServer(firstPart, multiTargets, nil, generateID()) end) end
+    if not firstPart then return end
+    
+    pcall(function()
+        if proxyRemote and seedVal then
+            local rId = proxyRemote:GetAttribute("Id")
+            if rId then
+                local atkN = encodeName("RE/RegisterAttack")
+                local hitN = encodeName("RE/RegisterHit")
+                local arg2 = _bxor(tonumber(rId) + 909090, seedVal * 2)
+                proxyRemote:FireServer(atkN, arg2)
+                proxyRemote:FireServer(hitN, arg2, firstPart, multiTargets, nil, generateID())
+            end
+        end
+        if attackRemoteDirect and hitRemoteDirect then
+            attackRemoteDirect:FireServer()
+            hitRemoteDirect:FireServer(firstPart, multiTargets, nil, generateID())
+        end
+    end)
 end
 
 local function applyFastM1()
