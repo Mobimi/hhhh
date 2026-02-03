@@ -2,22 +2,6 @@ local Players, RunService, UserInputService, CoreGui, ReplicatedStorage, TweenSe
 local player, currentTab, guiVisible = Players.LocalPlayer, 1, true
 local char = player.Character or player.CharacterAdded:Wait()
 player.CharacterAdded:Connect(function(c) char = c end)
-
--- MOBILE COMPATIBILITY LAYER
-local _bit = bit32 or bit
-local _bxor = (_bit and _bit.bxor) or function(a, b) -- Fallback XOR
-    local res, m = 0, 1
-    while a > 0 or b > 0 do
-        if a % 2 ~= b % 2 then res = res + m end
-        a, b, m = math.floor(a / 2), math.floor(b / 2), m * 2
-    end
-    return res
-end
-local function getServerTime()
-    local success, time = pcall(function() return workspace:GetServerTimeNow() end)
-    return success and time or os.time()
-end
-
 local ui_controls, configFolder, configFileName, allStrokes, allBtnStrokes = {}, "j4f", "j4f/config_j4f.json", {}, {}
 local hitboxEnabled, hitboxSize, showHitbox = {self = false, others = false, mob = false}, {self = 10, others = 10, mob = 10}, {self = false, others = false, mob = false}
 local selectedBodyParts = {
@@ -72,9 +56,7 @@ local function refreshUI()
     end
 end
 
-local ScreenGui = Instance.new("ScreenGui") ScreenGui.Name, ScreenGui.ResetOnSpawn = "HB_PRO_V3", false
-pcall(function() ScreenGui.Parent = CoreGui end)
-if not ScreenGui.Parent then ScreenGui.Parent = player:WaitForChild("PlayerGui") end
+local ScreenGui = Instance.new("ScreenGui", CoreGui) ScreenGui.Name, ScreenGui.ResetOnSpawn = "HB_PRO_V3", false
 local ToggleBtn = Instance.new("ImageButton", ScreenGui) ToggleBtn.Size, ToggleBtn.Position, ToggleBtn.BackgroundColor3, ToggleBtn.BackgroundTransparency, ToggleBtn.Image, ToggleBtn.ScaleType, ToggleBtn.ZIndex = UDim2.new(0,60,0,60), UDim2.new(0.02,0,0.5,-30), THEME.BG_SIDE, 0.2, "rbxthumb://type=Asset&id=84053545044369&w=420&h=420", Enum.ScaleType.Fit, 15
 corner(ToggleBtn,12) stroke(ToggleBtn,THEME.ACCENT,2,true) makeDraggable(ToggleBtn)
 local MainFrame = Instance.new("Frame", ScreenGui) MainFrame.Name, MainFrame.Size, MainFrame.Position, MainFrame.BackgroundColor3, MainFrame.BorderSizePixel, MainFrame.ClipsDescendants = "MainFrame", UDim2.new(0,540,0,340), UDim2.new(0.5,-270,0.5,-170), THEME.BG_MAIN, 0, true
@@ -177,12 +159,11 @@ local function generateID()
 end
 
 local function encodeName(remoteName)
-    local serverTime = getServerTime()
+    local serverTime = workspace:GetServerTimeNow()
     local key = math.floor(serverTime / 10 % 10) + 1
     local encoded = ""
     for i = 1, #remoteName do
-        local b = string.byte(remoteName, i)
-        encoded = encoded .. string.char(_bxor(b, key))
+        encoded = encoded .. string.char(bit32.bxor(string.byte(remoteName, i), key))
     end
     return encoded
 end
@@ -278,23 +259,24 @@ local function performHit()
         end
     end
     if not firstPart then return end
-    
-    pcall(function()
-        if proxyRemote and seedVal then
-            local rId = proxyRemote:GetAttribute("Id")
-            if rId then
-                local atkN = encodeName("RE/RegisterAttack")
-                local hitN = encodeName("RE/RegisterHit")
-                local arg2 = _bxor(tonumber(rId) + 909090, seedVal * 2)
+    if proxyRemote and seedVal then
+        local rId = tonumber(proxyRemote:GetAttribute("Id"))
+        if rId then
+            local atkN = encodeName("RE/RegisterAttack")
+            local hitN = encodeName("RE/RegisterHit")
+            local arg2 = bit32.bxor(rId + 909090, seedVal * 2)
+            pcall(function()
                 proxyRemote:FireServer(atkN, arg2)
                 proxyRemote:FireServer(hitN, arg2, firstPart, multiTargets, nil, generateID())
-            end
+            end)
         end
-        if attackRemoteDirect and hitRemoteDirect then
+    end
+    if attackRemoteDirect and hitRemoteDirect then
+        pcall(function()
             attackRemoteDirect:FireServer()
             hitRemoteDirect:FireServer(firstPart, multiTargets, nil, generateID())
-        end
-    end)
+        end)
+    end
 end
 
 local function applyFastM1()
