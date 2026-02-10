@@ -24,6 +24,7 @@ local autoChestMirage, autoChestStyle, autoChestType, autoActiveV4Enabled, autoT
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 local baseScanInterval = isMobile and 0.8 or 0.5
 local scanInterval, espInterval = baseScanInterval, isMobile and 1.0 or 0.5
+local characterParts, lastFoamState = {}, nil
 local THEME = {
     BG_MAIN = Color3.fromRGB(15, 15, 20),
     BG_SIDE = Color3.fromRGB(22, 22, 28),
@@ -444,12 +445,10 @@ local function updateESP()
                 nl.Name = "NameLabel"; nl.Size = UDim2.new(1, 0, 0, 20); nl.Position = UDim2.new(0, 0, 0, 10)
                 nl.BackgroundTransparency = 1; nl.Text = p.Name; nl.TextColor3 = THEME.ACCENT
                 nl.Font = Enum.Font.GothamBold; nl.TextSize = 12
-                Instance.new("UIStroke", nl).Thickness = 1.2
                 
                 local il = Instance.new("TextLabel", bb)
                 il.Name = "InfoLabel"; il.Size = UDim2.new(1, 0, 0, 15); il.Position = UDim2.new(0, 0, 0, 28)
                 il.BackgroundTransparency = 1; il.Font = Enum.Font.GothamMedium; il.TextSize = 10
-                Instance.new("UIStroke", il).Thickness = 1
                 espBillboards[p] = bb
             end
             
@@ -461,7 +460,7 @@ local function updateESP()
                 if hbBg then
                     hbBg.Visible = espSettings.ShowBar
                     local hbFill = hbBg:FindFirstChild("HPBarFill")
-                    if hbFill then tween(hbFill, {Size = UDim2.new(hpPercent, 0, 1, 0), BackgroundColor3 = hpPercent > 0.5 and THEME.GREEN or THEME.RED}, 0.2) end
+                    if hbFill then hbFill.Size = UDim2.new(hpPercent, 0, 1, 0); hbFill.BackgroundColor3 = hpPercent > 0.5 and THEME.GREEN or THEME.RED end
                 end
                 local il = bb:FindFirstChild("InfoLabel")
                 if il then
@@ -736,12 +735,27 @@ ui_controls.autoChestStyle = addDropdown(secretIslandList, "Chest Style", {"TP",
 ui_controls.autoChestType = addDropdown(secretIslandList, "Chest Type", {"All", "Fragment", "Mirage"}, "All", function(v) autoChestType = v end)
 
 local cache = { mirage = nil, chest = nil, lastScan = 0, boatTarget = nil, boatParts = {}, touchedChests = {}, lastLootTime = 0, dState = "", dTick = 0, lastDeath = 0 }
+local function updateCharParts()
+    characterParts = {}
+    if char then
+        for _, v in ipairs(char:GetDescendants()) do
+            if v:IsA("BasePart") then table.insert(characterParts, v) end
+        end
+    end
+end
 local function setupDeathListener(c)
     local hum = c:WaitForChild("Humanoid", 10)
     if hum then hum.Died:Connect(function() cache.lastDeath = tick() end) end
+    updateCharParts()
 end
-player.CharacterAdded:Connect(setupDeathListener)
-if player.Character then setupDeathListener(player.Character) end
+player.CharacterAdded:Connect(function(c) 
+    updateCharParts()
+    c.AttributeChanged:Connect(function() updateCharParts() end)
+end)
+if player.Character then 
+    updateCharParts()
+    player.Character.AttributeChanged:Connect(function() updateCharParts() end)
+end
 
 local dungeonCache = {
     charParts = {},
@@ -753,161 +767,13 @@ local dungeonCache = {
     mapChildCount = 0
 }
 
-RunService.Heartbeat:Connect(function(dt: number)
-    local myChar = player.Character
-    local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+RunService.Heartbeat:Connect(function(dt)
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum then return end
 
-    if autoDungeonEnabled and myHRP then
-        pcall(function()
-            local dungeonTargetPos = nil
-            local dungeonMap = workspace.Map:FindFirstChild("Dungeon")
-            local enemiesFolder = workspace:FindFirstChild("Enemies")
-            local enemies = enemiesFolder and enemiesFolder:GetChildren() or {}
-            
-            local function spamAllPortals()
-                if dungeonMap then
-                    for _, room in dungeonMap:GetChildren() do
-                        local portal = room:FindFirstChild("ExitTeleporter") or room:FindFirstChild("ExitTeleport")
-                        local root = portal and portal:FindFirstChild("Root")
-                        if root then pcall(function() firetouchinterest(myHRP, root, 0) firetouchinterest(myHRP, root, 1) end) end
-                    end
-                end
-            end
-
-            local shouldSpamPortal = (tick() - cache.lastDeath < 5)
-            local childCount = dungeonMap and #dungeonMap:GetChildren() or 0
-            if childCount ~= dungeonCache.mapChildCount then
-                dungeonCache.mapChildCount = childCount
-                cache.dTick = tick()
-            end
-            if shouldSpamPortal or (tick() - cache.dTick < 2) then
-                spamAllPortals()
-            end
-
-            if tick() - dungeonCache.lastHeightCalc > 1 then
-                dungeonCache.baseHeight = 13
-                if myHRP.Size.Y > 2 then dungeonCache.baseHeight = dungeonCache.baseHeight + (myHRP.Size.Y * 1.5)
-                elseif hitboxEnabled.self then dungeonCache.baseHeight = dungeonCache.baseHeight + (hitboxSize.self * 0.8) end
-                dungeonCache.lastHeightCalc = tick()
-            end
-            local baseHeight = dungeonCache.baseHeight
-
-            local nearestDist, bestTarget = math.huge, nil
-            for _, e in enemies do
-                local eHRP = e:FindFirstChild("HumanoidRootPart")
-                local eHum = e:FindFirstChildOfClass("Humanoid")
-                if eHRP and eHum and eHum.Health > 0 then
-                    local name = e.Name:lower()
-                    local isPriority = (e.Name == "PropHitboxPlaceholder")
-                    local isAlly = name:find("shadow") or name:find("blank") or name:find("buddy")
-                    if not isAlly then
-                        local d = (myHRP.Position - eHRP.Position).Magnitude
-                        local score = isPriority and 0 or d
-                        if score < nearestDist then
-                            nearestDist = score
-                            bestTarget = eHRP
-                        end
-                        if isPriority then break end
-                    end
-                end
-            end
-            if bestTarget then dungeonTargetPos = bestTarget.Position + Vector3.new(0, baseHeight, 0) end
-
-            if not dungeonTargetPos then
-                spamAllPortals()
-            end
-
-            if dungeonTargetPos then
-                if tick() - dungeonCache.lastPartsCached > 2 then
-                    dungeonCache.charParts = {}
-                    for _, v in char:GetDescendants() do if v:IsA("BasePart") then table.insert(dungeonCache.charParts, v) end end
-                    dungeonCache.lastPartsCached = tick()
-                end
-                for _, v in dungeonCache.charParts do if v.CanCollide then v.CanCollide = false end end
-                
-                myHRP.Velocity = Vector3.zero
-                local dist = (myHRP.Position - dungeonTargetPos).Magnitude
-                
-                if dungeonCache.lastPosition and (myHRP.Position - dungeonCache.lastPosition).Magnitude < 0.5 then
-                    dungeonCache.stuckTimer = dungeonCache.stuckTimer + dt
-                    if dungeonCache.stuckTimer > 3 then
-                        spamAllPortals()
-                        dungeonCache.stuckTimer = 0
-                    end
-                else dungeonCache.stuckTimer = 0 end
-                dungeonCache.lastPosition = myHRP.Position
-                
-                if dist > 0.1 then
-                    local spd = (dist < 5) and 150 or (dist < 25 and 450 or 350)
-                    local alpha = math.clamp((spd * dt) / dist, 0, 0.8)
-                    local lookAt = Vector3.new(dungeonTargetPos.X, myHRP.Position.Y, dungeonTargetPos.Z)
-                    if (lookAt - myHRP.Position).Magnitude < 0.5 then lookAt = myHRP.Position + myHRP.CFrame.LookVector end
-                    local targetCF = CFrame.new(myHRP.Position, lookAt) * CFrame.new(0, 0, -dist) * CFrame.new(0, dungeonTargetPos.Y - myHRP.Position.Y, 0)
-                    myHRP.CFrame = myHRP.CFrame:Lerp(targetCF, alpha)
-                end
-            else 
-                myHRP.Velocity = Vector3.zero 
-                spamAllPortals()
-            end
-        end)
-    end
-
-    -- Hitbox & Combat
-    for t, e in hitboxEnabled do if e then expandHitbox(t) end end
-    if fastM1Enabled then applyFastM1() end
-    
-    -- ESP & Chest Scanning (adaptive)
-    if tick() - cache.lastScan > scanInterval then
-        updateIslandESP()
-        if autoChestMirage then
-            cache.mirage = findIsland("Mirage Island")
-            if cache.mirage then
-                local chestFolder = workspace:FindFirstChild("ChestModels")
-                cache.chest = nil
-                if chestFolder then
-                    for _, chest in chestFolder:GetChildren() do
-                        if not cache.touchedChests[chest] then
-                            local name = chest.Name:lower()
-                            local isMatch = (autoChestType == "All") or (autoChestType == "Fragment" and name:find("fragment")) or (autoChestType == "Mirage" and name:find("mirage"))
-                            if isMatch then
-                                local p = chest:FindFirstChildWhichIsA("BasePart") or chest.PrimaryPart
-                                if p then cache.chest = p; break end
-                            end
-                        end
-                    end
-                    if #chestFolder:GetChildren() == 0 or tick() % 300 < 1 then cache.touchedChests = {} end
-                end
-            end
-        end
-        cache.lastScan = tick()
-    end
-
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    local hrp, hum = char.HumanoidRootPart, char:FindFirstChildOfClass("Humanoid")
-    
-    -- TP Speed
-    if tpEnabled and hum and hum.MoveDirection.Magnitude > 0 then
-        local extraSpeed = (tpSpeed - 1) * hum.WalkSpeed
-        if extraSpeed > 0 then hrp.CFrame = hrp.CFrame + (hum.MoveDirection * extraSpeed * dt) end
-    end
-    
-    if waterWalkEnabled then
-        if antiWaterEnabled and hrp.Position.Y < antiWaterThreshold then
-            hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
-            hrp.CFrame = CFrame.new(hrp.Position.X, 1, hrp.Position.Z)
-        end
-        pcall(function() if workspace._WorldOrigin["Foam;"].CanCollide == false then workspace._WorldOrigin["Foam;"].CanCollide = true end end)
-    else
-        pcall(function() if workspace._WorldOrigin["Foam;"].CanCollide == true then workspace._WorldOrigin["Foam;"].CanCollide = false end end)
-    end
-    
-    if infinityJumpEnabled then char:SetAttribute("SkyjumpBoost", 3000) end
-    if dashLengthValue > 0 then char:SetAttribute("DashLength", dashLengthValue) end
-    if hum then 
-        if jumpHeightEnabled then hum.UseJumpPower, hum.JumpHeight = false, jumpHeightValue
-        else hum.UseJumpPower = true end
-    end
-
+    -- Per-Frame Smooth Logic (Lerp/Tween/Fly)
     -- Island Tween
     for name, enabled in islandTweenEnabled do
         if enabled then
@@ -915,7 +781,7 @@ RunService.Heartbeat:Connect(function(dt: number)
             if obj then
                 local posPart = obj:FindFirstChild("MainPart") or obj:FindFirstChildOfClass("BasePart") or obj.PrimaryPart
                 if posPart then
-                    for _, v in char:GetDescendants() do if v:IsA("BasePart") then v.CanCollide = false end end
+                    for _, v in ipairs(characterParts) do v.CanCollide = false end
                     hrp.Velocity *= 0.1
                     local target = posPart.Position + Vector3.new(0, 250, 0)
                     local dist = (hrp.Position - target).Magnitude
@@ -930,12 +796,10 @@ RunService.Heartbeat:Connect(function(dt: number)
 
     -- Auto Chest Mirage
     if autoChestMirage and cache.mirage then
-        for _, v in char:GetDescendants() do if v:IsA("BasePart") then v.CanCollide = false end end
+        for _, v in ipairs(characterParts) do v.CanCollide = false end
         hrp.Velocity *= 0.1
-        
         local miragePos = cache.mirage:GetModelCFrame().Position
         local distToMirage = (Vector2.new(hrp.Position.X, hrp.Position.Z) - Vector2.new(miragePos.X, miragePos.Z)).Magnitude
-        
         if distToMirage > 1500 then
             local targetPos = miragePos + Vector3.new(0, 250, 0)
             local dist = (hrp.Position - targetPos).Magnitude
@@ -946,74 +810,162 @@ RunService.Heartbeat:Connect(function(dt: number)
         elseif cache.chest then
             local targetPos = cache.chest.Position
             local distToChest = (hrp.Position - targetPos).Magnitude
-            
             if autoChestStyle == "TP" then
                 if tick() - cache.lastLootTime >= 1.5 then
                     hrp.CFrame = CFrame.new(targetPos)
-                    if distToChest < 5 then
-                        cache.touchedChests[cache.chest.Parent] = true
-                        cache.chest = nil
-                        cache.lastLootTime = tick()
-                    end
+                    if distToChest < 5 then cache.touchedChests[cache.chest.Parent] = true; cache.chest = nil; cache.lastLootTime = tick() end
                 end
             else
-                local horizontalDist = (Vector2.new(hrp.Position.X, hrp.Position.Z) - Vector2.new(targetPos.X, targetPos.Z)).Magnitude
-                local finalTarget = (horizontalDist > 50) and Vector3.new(targetPos.X, 250, targetPos.Z) or targetPos
-                local totalDist = (hrp.Position - finalTarget).Magnitude
-                
-                if horizontalDist <= 50 and totalDist < 5 then
-                    cache.touchedChests[cache.chest.Parent] = true
-                    cache.chest = nil
-                elseif totalDist > 5 then
-                    local alpha = math.min((islandTweenSpeed * dt) / totalDist, 1)
-                    hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(hrp.Position, finalTarget) * CFrame.new(0, 0, -totalDist), alpha)
+                local hDist = (Vector2.new(hrp.Position.X, hrp.Position.Z) - Vector2.new(targetPos.X, targetPos.Z)).Magnitude
+                local fTarget = (hDist > 50) and Vector3.new(targetPos.X, 250, targetPos.Z) or targetPos
+                local tDist = (hrp.Position - fTarget).Magnitude
+                if hDist <= 50 and tDist < 5 then cache.touchedChests[cache.chest.Parent] = true; cache.chest = nil
+                elseif tDist > 5 then
+                    local alpha = math.min((islandTweenSpeed * dt) / tDist, 1)
+                    hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(hrp.Position, fTarget) * CFrame.new(0, 0, -tDist), alpha)
                 end
             end
         else
             local targetPos = miragePos + Vector3.new(0, 250, 0)
-            local dist = (hrp.Position - targetPos).Magnitude
-            if dist > 5 then
-                local alpha = math.min((islandTweenSpeed * dt) / dist, 1)
-                hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(hrp.Position, targetPos) * CFrame.new(0, 0, -dist), alpha)
+            if (hrp.Position - targetPos).Magnitude > 5 then
+                local alpha = math.min((islandTweenSpeed * dt) / (hrp.Position - targetPos).Magnitude, 1)
+                hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(hrp.Position, targetPos) * CFrame.new(0, 0, -(hrp.Position - targetPos).Magnitude), alpha)
             end
         end
     end
 
     if flyBoatEnabled and currentBoat and currentBoat.Parent then
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            local seat = currentBoat:FindFirstChildOfClass("VehicleSeat") or currentBoat:FindFirstChild("VehicleSeat", true)
-            isPlayerOnBoat = (seat and seat.Occupant ~= nil)
-            if isPlayerOnBoat then
-                if not cache.boatTarget then cache.boatTarget = hrp.Position end
-                if #cache.boatParts == 0 then
-                    for _, v in currentBoat:GetDescendants() do if v:IsA("BasePart") then table.insert(cache.boatParts, v) end end
-                end
+        local seat = currentBoat:FindFirstChildOfClass("VehicleSeat") or currentBoat:FindFirstChild("VehicleSeat", true)
+        isPlayerOnBoat = (seat and seat.Occupant ~= nil)
+        if isPlayerOnBoat then
+            if not cache.boatTarget then cache.boatTarget = hrp.Position end
+            if #cache.boatParts == 0 then for _, v in ipairs(currentBoat:GetDescendants()) do if v:IsA("BasePart") then table.insert(cache.boatParts, v) end end end
+            local cam, moveDir = workspace.CurrentCamera, Vector3.zero
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cam.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.CFrame.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.CFrame.RightVector end
+            if moveDir.Magnitude > 0 then cache.boatTarget = cache.boatTarget + (moveDir.Unit * flyBoatSpeed * dt) end
+            for _, v in ipairs(cache.boatParts) do v.Anchored, v.Velocity, v.RotVelocity = false, Vector3.zero, Vector3.zero end
+            if flyBoatStyle == "Custom" then hrp.CFrame = CFrame.lookAt(cache.boatTarget, cache.boatTarget + cam.CFrame.LookVector)
+            else cache.boatTarget = Vector3.new(cache.boatTarget.X, flyBoatHeight, cache.boatTarget.Z) hrp.CFrame = CFrame.new(cache.boatTarget) * CFrame.lookAt(Vector3.zero, Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z)).Rotation end
+        else
+            cache.boatTarget = (currentBoat.PrimaryPart or currentBoat:FindFirstChildWhichIsA("BasePart")).Position
+            for _, v in ipairs(cache.boatParts) do if not v.Anchored then v.Anchored = true end end
+        end
+    end
+
+    -- Combat & Movement
+    if fastM1Enabled then applyFastM1() end
+    if tpEnabled and hum and hum.MoveDirection.Magnitude > 0 then
+        local extra = (tpSpeed - 1) * hum.WalkSpeed
+        if extra > 0 then hrp.CFrame = hrp.CFrame + (hum.MoveDirection * extra * dt) end
+    end
+    
+    if waterWalkEnabled then
+        if antiWaterEnabled and hrp.Position.Y < antiWaterThreshold then
+            hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
+            hrp.CFrame = CFrame.new(hrp.Position.X, 1, hrp.Position.Z)
+        end
+        if lastFoamState ~= true then
+            pcall(function() workspace._WorldOrigin["Foam;"].CanCollide = true end)
+            lastFoamState = true
+        end
+    elseif lastFoamState ~= false then
+        pcall(function() workspace._WorldOrigin["Foam;"].CanCollide = false end)
+        lastFoamState = false
+    end
+    
+    if infinityJumpEnabled then char:SetAttribute("SkyjumpBoost", 3000) end
+    if dashLengthValue > 0 then char:SetAttribute("DashLength", dashLengthValue) end
+    if hum then 
+        if jumpHeightEnabled then hum.UseJumpPower, hum.JumpHeight = false, jumpHeightValue
+        else hum.UseJumpPower = true end
+    end
+
+end)
+
+-- Background Scheduler (Heavy tasks moved here)
+task.spawn(function()
+    while true do
+        local dt = task.wait(0.1)
+        if autoDungeonEnabled and char and char:FindFirstChild("HumanoidRootPart") then
+            pcall(function()
+                local myHRP = char.HumanoidRootPart
+                local dungeonMap = workspace.Map:FindFirstChild("Dungeon")
+                local enemies = (workspace:FindFirstChild("Enemies") and workspace.Enemies:GetChildren()) or {}
                 
-                local cam, moveDir = workspace.CurrentCamera, Vector3.zero
-                if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cam.CFrame.LookVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.CFrame.LookVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.CFrame.RightVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.CFrame.RightVector end
-                if moveDir.Magnitude > 0 then cache.boatTarget = cache.boatTarget + (moveDir.Unit * flyBoatSpeed * dt) end
-                
-                for _, v in cache.boatParts do 
-                    v.Anchored, v.Velocity, v.RotVelocity = false, Vector3.zero, Vector3.zero 
+                local function spamAllPortals()
+                    if dungeonMap then
+                        for _, room in dungeonMap:GetChildren() do
+                            local portal = room:FindFirstChild("ExitTeleporter") or room:FindFirstChild("ExitTeleport")
+                            local root = portal and portal:FindFirstChild("Root")
+                            if root then pcall(function() firetouchinterest(myHRP, root, 0) firetouchinterest(myHRP, root, 1) end) end
+                        end
+                    end
                 end
 
-                if flyBoatStyle == "Custom" then hrp.CFrame = CFrame.lookAt(cache.boatTarget, cache.boatTarget + cam.CFrame.LookVector)
-                else
-                    cache.boatTarget = Vector3.new(cache.boatTarget.X, flyBoatHeight, cache.boatTarget.Z)
-                    hrp.CFrame = CFrame.new(cache.boatTarget) * CFrame.lookAt(Vector3.zero, Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z)).Rotation
+                if (tick() - cache.lastDeath < 5) or (tick() - cache.dTick < 2) then spamAllPortals() end
+                
+                local nearestDist, bestTarget = math.huge, nil
+                for _, e in ipairs(enemies) do
+                    local eHRP = e:FindFirstChild("HumanoidRootPart")
+                    local eHum = e:FindFirstChildOfClass("Humanoid")
+                    if eHRP and eHum and eHum.Health > 0 then
+                        local isPriority = (e.Name == "PropHitboxPlaceholder")
+                        if not (e.Name:lower():find("shadow") or e.Name:lower():find("blank")) then
+                            local d = (myHRP.Position - eHRP.Position).Magnitude
+                            if (isPriority and 0 or d) < nearestDist then
+                                nearestDist = (isPriority and 0 or d); bestTarget = eHRP
+                            end
+                            if isPriority then break end
+                        end
+                    end
                 end
-            else
-                cache.boatTarget = (currentBoat.PrimaryPart or currentBoat:FindFirstChildWhichIsA("BasePart")).Position
-                for _, v in ipairs(cache.boatParts) do if not v.Anchored then v.Anchored = true end end
+                
+                if bestTarget then
+                    local targetPos = bestTarget.Position + Vector3.new(0, dungeonCache.baseHeight, 0)
+                    for _, v in ipairs(characterParts) do if v.CanCollide then v.CanCollide = false end end
+                    myHRP.Velocity = Vector3.zero
+                    local dist = (myHRP.Position - targetPos).Magnitude
+                    if dist > 0.1 then
+                        local spd = (dist < 5) and 150 or (dist < 25 and 450 or 350)
+                        local alpha = math.clamp((spd * dt) / dist, 0, 0.8)
+                        local look = Vector3.new(targetPos.X, myHRP.Position.Y, targetPos.Z)
+                        myHRP.CFrame = myHRP.CFrame:Lerp(CFrame.new(myHRP.Position, look) * CFrame.new(0, 0, -dist) * CFrame.new(0, targetPos.Y - myHRP.Position.Y, 0), alpha)
+                    end
+                else spamAllPortals() end
+            end)
+        end
+    end
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        -- Periodic Scans
+        for t, e in pairs(hitboxEnabled) do if e then expandHitbox(t) end end
+        updateIslandESP()
+        if espSettings.Enabled then updateESP() end
+        if autoChestMirage then
+            cache.mirage = findIsland("Mirage Island")
+            if cache.mirage then
+                local chestFolder = workspace:FindFirstChild("ChestModels")
+                if chestFolder then
+                    for _, chest in ipairs(chestFolder:GetChildren()) do
+                        if not cache.touchedChests[chest] then
+                            local n = chest.Name:lower()
+                            if (autoChestType == "All") or (autoChestType == "Fragment" and n:find("fragment")) or (autoChestType == "Mirage" and n:find("mirage")) then
+                                local p = chest:FindFirstChildWhichIsA("BasePart") or chest.PrimaryPart
+                                if p then cache.chest = p; break end
+                            end
+                        end
+                    end
+                    if #chestFolder:GetChildren() == 0 or tick() % 300 < 1 then cache.touchedChests = {} end
+                end
             end
         end
-    elseif not flyBoatEnabled and currentBoat then
-        if currentBoat.Parent then for _, v in ipairs(cache.boatParts) do v.Anchored = false end end
-        currentBoat, isPlayerOnBoat, cache.boatTarget, cache.boatParts = nil, false, nil, {}
+        if espSettings.Enabled then updateESP() end
     end
 end)
 
@@ -1122,7 +1074,7 @@ ui_controls.tpSpeed = addSlider(tpWalkList, "Speed Mult", 1, 8, 2, 1, function(v
 
 addSection(TabUtils, "Visuals")
 local espList = addCollapsible(TabUtils, "Player ESP")
-ui_controls.espEnabled = addToggle(espList, "Enabled", false, function(v) espSettings.Enabled = v if v then espConnection = RunService.Heartbeat:Connect(updateESP) else if espConnection then espConnection:Disconnect() espConnection = nil end clearESP() end end)
+ui_controls.espEnabled = addToggle(espList, "Enabled", false, function(v) espSettings.Enabled = v if not v then clearESP() end end)
 ui_controls.espText = addToggle(espList, "Show HP Text", true, function(v) espSettings.ShowText = v end)
 ui_controls.espBar = addToggle(espList, "Show HP Bar", true, function(v) espSettings.ShowBar = v end)
 
