@@ -158,28 +158,41 @@ local function tween(target, canBoost, object)
     local cfg = getgenv().Config
     local startT = tick()
     
+    -- Tạo platform chống rớt biển
+    local plat = Instance.new("Part", workspace)
+    plat.Size = Vector3.new(10, 1, 10)
+    plat.Anchored = true
+    plat.Transparency = 1
+    plat.CanCollide = true
+    
     while true do
         if not cfg.AutoChest or hasDarkness() then break end
-        -- Skip ngay nếu rương biến mất hoặc quá 3 giây
-        if (object and not object.Parent) or (tick() - startT > 3) then break end
+        if (object and not object.Parent) or (tick() - startT > 10) then break end
         
         local dt = RunService.Heartbeat:Wait()
         hrp.Velocity = Vector3.new(0,0,0)
         
         local dist = (target - hrp.Position).Magnitude
-        if dist <= 2.5 then break end -- Đã đủ gần để lượm
+        if dist <= 2.5 then 
+            hrp.CFrame = CFrame.new(target)
+            task.wait(0.12) -- Nghỉ cực ngắn để server nhận touch
+            break 
+        end
         
         local speed = (canBoost and dist <= cfg.DetectionRadius) and cfg.BoostSpeed or cfg.NormalSpeed
         local step = speed * dt
         
-        -- Chống bay quá đà (Overshoot) - Nếu bước di chuyển lớn hơn khoảng cách còn lại
         if step >= dist then
             hrp.CFrame = CFrame.new(target)
+            task.wait(0.12)
             break
         end
         
-        hrp.CFrame = CFrame.new(hrp.Position + (target - hrp.Position).Unit * step, target)
+        local nextPos = hrp.Position + (target - hrp.Position).Unit * step
+        hrp.CFrame = CFrame.new(nextPos, target)
+        plat.CFrame = hrp.CFrame * CFrame.new(0, -3.5, 0)
     end
+    plat:Destroy()
 end
 
 local function getChest()
@@ -282,6 +295,12 @@ while getgenv().Config.AutoChest do
         if i.name == "Cafe" then task.wait(1.6) end
         if i.name == "Tàu Ma" then
             local function checkAndMoveToGhostShip()
+                -- Đợi map load nế chưa thấy Interior
+                local it = tick()
+                while not workspace.Map:FindFirstChild("GhostShipInterior") and tick() - it < 5 do
+                    task.wait(0.5)
+                end
+
                 local ghostShip = workspace.Map:FindFirstChild("GhostShipInterior")
                 if not ghostShip then return false end
                 
@@ -294,7 +313,8 @@ while getgenv().Config.AutoChest do
                     for attempt = 1, 3 do
                         if not cfg.AutoChest or hasDarkness() then break end
                         tp(i.pos)
-                        task.wait(1)
+                        hrp.Velocity = Vector3.new(0,0,0) -- Triệt tiêu lực đẩy
+                        task.wait(1.2)
                     end
                 end
                 
