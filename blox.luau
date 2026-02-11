@@ -603,7 +603,7 @@ local function findIsland(islandName)
     end
     -- Fallback loop stricter
     for _, child in map:GetChildren() do
-        if child:IsA("Model") then
+        if child:IsA("Model") or child:IsA("Folder") then
             local ln = child.Name:lower()
             for _, p in targets do
                 if ln:find(p:lower()) then return child end
@@ -783,7 +783,7 @@ RunService.Heartbeat:Connect(function(dt)
         if enabled then
             local obj = findIsland(name)
             if obj then
-                local posPart = obj:FindFirstChild("MainPart") or obj:FindFirstChildOfClass("BasePart") or obj.PrimaryPart
+                local posPart = obj:FindFirstChild("MainPart", true) or obj:FindFirstChildWhichIsA("BasePart", true) or obj.PrimaryPart
                 if posPart then
                     for _, v in ipairs(characterParts) do v.CanCollide = false end
                     hrp.Velocity *= 0.1
