@@ -2,9 +2,11 @@
 -- Loader trung tâm của j4f Modular System
 print("🚩 J4F MODULAR STARTING... 🚩")
 
-local Globals = loadstring(readfile("j4f_mod/globals.luau"))()
-local Utils = loadstring(readfile("j4f_mod/utils.luau"))()
-local Katakuri = loadstring(readfile("j4f_mod/features/katakuri.luau"))()
+local baseUrl = "https://raw.githubusercontent.com/Mobimi/hhhh/refs/heads/main/j4f_mod/"
+
+local Globals = loadstring(game:HttpGet(baseUrl .. "globals.luau"))()
+local Utils = loadstring(game:HttpGet(baseUrl .. "utils.luau"))()
+local Katakuri = loadstring(game:HttpGet(baseUrl .. "features/katakuri.luau"))()
 
 -- Khởi động các vòng lặp đặc trưng
 Katakuri.startSpawner()

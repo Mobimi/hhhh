@@ -1,7 +1,8 @@
 -- UTILS.LUAU
 -- Chứa các hàm hỗ trợ vẽ UI và logic di chuyển cơ bản
 local Utils = {}
-local Globals = loadstring(readfile("j4f_mod/globals.luau"))()
+local baseUrl = "https://raw.githubusercontent.com/Mobimi/hhhh/refs/heads/main/j4f_mod/"
+local Globals = loadstring(game:HttpGet(baseUrl .. "globals.luau"))()
 
 function Utils.corner(p, r) 
     local c = Instance.new("UICorner", p) 

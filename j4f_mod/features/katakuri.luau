@@ -1,7 +1,8 @@
 -- KATAKURI.LUAU
 -- Chứa toàn bộ logic triệu hồi và farm Katakuri (Cake Prince)
 local Katakuri = {}
-local Globals = loadstring(readfile("j4f_mod/globals.luau"))()
+local baseUrl = "https://raw.githubusercontent.com/Mobimi/hhhh/refs/heads/main/j4f_mod/"
+local Globals = loadstring(game:HttpGet(baseUrl .. "globals.luau"))()
 
 function Katakuri.startSpawner()
     task.spawn(function()
