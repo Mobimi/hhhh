@@ -1,4 +1,4 @@
-local Players, RunService, UserInputService, CoreGui, ReplicatedStorage, TweenService, HttpService, TeleportService, Lighting = game:GetService("Players"), game:GetService("RunService"), game:GetService("UserInputService"), game:GetService("CoreGui"), game:GetService("ReplicatedStorage"), game:GetService("TweenService"), game:GetService("HttpService"), game:GetService("TeleportService"), game:GetService("Lighting")
+local Players, RunService, UserInputService, CoreGui, ReplicatedStorage, TweenService, HttpService, TeleportService, Lighting, VirtualUser = game:GetService("Players"), game:GetService("RunService"), game:GetService("UserInputService"), game:GetService("CoreGui"), game:GetService("ReplicatedStorage"), game:GetService("TweenService"), game:GetService("HttpService"), game:GetService("TeleportService"), game:GetService("Lighting"), game:GetService("VirtualUser")
 local player, currentTab, guiVisible = Players.LocalPlayer, 1, true
 local char = player.Character or player.CharacterAdded:Wait()
 player.CharacterAdded:Connect(function(c) char = c end)
@@ -10,30 +10,37 @@ local selectedBodyParts = {
     mob = {Head = false, Torso = false, ["Left Arm"] = false, ["Right Arm"] = false, ["Left Leg"] = false, ["Right Leg"] = false, HumanoidRootPart = false}
 }
 local mobPath, originalProperties, processedParts, mobCache = "workspace", setmetatable({}, {__mode = "k"}), {}, {lastScan = 0, list = {}}
-local auraEnabled, auraRadius, auraDelay, lastHitTime, hitCount, auraMode = true, 1000, 0.01, 0, 0, "Unencode"
-local auraFruitEnabled, auraFruitRadius, auraFruitDelay = true, 500, 0.01
+local auraEnabled, auraFruitEnabled = true, true
+local fastMeleeMultiplier, fastFruitMultiplier = 1, 1
+local selectedAttacks = {true, false, false, false, false}
+local last2s, last10s = 0, 0
 local attackRemote, hitRemote, auraConnection, isSpamming, spamConnection, lastAttack = nil, nil, nil, false, nil, 0
 local proxyRemote, seedVal, attackRemoteDirect, hitRemoteDirect = nil, nil, nil, nil
-local selectedAttacks, fastM1Enabled, fastMeleeMultiplier, fastFruitMultiplier = {true, true, true, true, true}, false, 1, 1
-local boatSpeed, tpEnabled, tpSpeed, autoRaceV3Enabled, autoBusoEnabled, infinityJumpEnabled = 200, false, 2, false, true, false
-local jumpHeightEnabled, jumpHeightValue, dashLengthValue, waterWalkEnabled, antiWaterEnabled, antiWaterThreshold = false, 7.2, 0, true, true, -0.807
-local flyBoatEnabled, flyBoatSpeed, flyBoatHeight, currentBoat, flyBoatStyle, isPlayerOnBoat = false, 200, 125, nil, "Default", false
-local islandTweenEnabled, islandTweenSpeed = {["Mirage Island"] = false, ["Kitsune Island"] = false, ["Prehistoric Island"] = false}, 360
-local espSettings, espConnection, espBillboards = { Enabled = false, ShowText = true, ShowBar = true }, nil, {}
-local islandEspSettings, islandEspBillboards = { Enabled = false, ESP_List = {["Mirage Island"] = false, ["Kitsune Island"] = false, ["Prehistoric Island"] = false} }, {}
-local autoChestMirage, autoChestStyle, autoChestType, autoActiveV4Enabled, autoTradeBonesEnabled, autoStoreFruitEnabled, autoDungeonEnabled = false, "Tween", "All", false, false, false, false
-local autoBossEnabled, autoBossHopEnabled, customBossEnabled, selectedBosses = false, false, false, {}
-local autoUpgradeRaceEnabled = false
-local autoFarmBonesEnabled, autoBoneTargetObj = false, nil
-local autoCakePrinceEnabled, autoSpawnCakePrince, autoCakeTargetObj = false, false, nil
-local cakeMobs = {"Cake Prince", "Cookie Crafter", "Cake Guard", "Baking Staff", "Head Baker"}
+local boatSpeed = 200
+local flags = {
+    autoRaceV3 = false, autoBuso = true, infinityJump = false, antiAfk = true,
+    jumpHeight = false, waterWalk = true, antiWater = true, flyBoat = false,
+    autoActiveV4 = false, autoTradeBones = false, autoStoreFruit = false, autoDungeon = false,
+    autoBoss = false, autoBossHop = false, customBoss = false, autoUpgradeRace = false,
+    autoFarmBones = false, autoCakeFarm = false, autoCakeSpawn = false, autoRandomFruit = false,
+    fastM1 = false, tpEnabled = false
+}
+local vals = {
+    jumpHeight = 7.2, dashLength = 0, antiWaterThreshold = -0.807,
+    flyBoatSpeed = 200, flyBoatHeight = 125, flyBoatStyle = "Default",
+    autoChestMirage = false, autoChestStyle = "Tween", autoChestType = "All",
+    autoEquipType = "Melee", auraRadius = 1000, auraDelay = 0.01, auraMode = "Unencode",
+    auraFruitRadius = 500, auraFruitDelay = 0.01
+}
+local islandFlags = {["Mirage Island"] = false, ["Kitsune Island"] = false, ["Prehistoric Island"] = false}
+local islandEspFlags = {["Mirage Island"] = false, ["Kitsune Island"] = false, ["Prehistoric Island"] = false}
+local espSettings = { Enabled = false, ShowText = true, ShowBar = true }
 local boneMobs = {"Reborn Skeleton", "Demonic Soul", "Posessed Mummy", "Living Zombie"}
-local autoBossTargetObj, lastBossDeadTime, masterBossList = nil, 0, {}
-local autoEquipType = "Melee" 
-local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-local baseScanInterval = isMobile and 0.8 or 0.5
-local scanInterval, espInterval = baseScanInterval, isMobile and 1.0 or 0.5
-local characterParts, lastFoamState, safeHeight = {}, nil, 15
+local cakeMobs = {"Cake Prince", "Baking Staff", "Cake Guard", "Cookie Crafter", "Head Baker"}
+local selectedBosses = {}
+local autoBoneTargetObj, autoCakeTargetObj, autoBossTargetObj = nil, nil, nil
+local lastBossDeadTime, masterBossList = 0, {}
+local characterParts = {}
 local THEME = {
     BG_MAIN = Color3.fromRGB(255, 255, 255),
     BG_SIDE = Color3.fromRGB(245, 245, 250),
@@ -234,6 +241,13 @@ local function encodeName(remoteName)
     return encoded
 end
 
+local function GetCommF()
+    return ReplicatedStorage:WaitForChild("Remotes", 5):WaitForChild("CommF_", 5)
+end
+local function GetCommE()
+    return ReplicatedStorage:WaitForChild("Remotes", 5):WaitForChild("CommE", 5)
+end
+
 task.spawn(function()
     while true do
         pcall(function()
@@ -299,7 +313,7 @@ local function getTargets(): {Model}
             local pHum = pChar:FindFirstChildOfClass("Humanoid")
             if pHRP and pHum and pHum.Health > 0 then
                 local d = (myPos - pHRP.Position).Magnitude
-                if d <= auraRadius then table.insert(targets, {model = pChar, dist = d}) end
+                if d <= vals.auraRadius then table.insert(targets, {model = pChar, dist = d}) end
             end
         end
     end
@@ -312,7 +326,7 @@ end
 local function performHit()
     if not auraEnabled then return end
     local now = tick()
-    if now - lastHitTime < auraDelay then return end
+    if now - lastHitTime < vals.auraDelay then return end
     lastHitTime = now
     local targets = getTargets()
     if #targets == 0 then return end
@@ -325,7 +339,7 @@ local function performHit()
         end
     end
     if not firstPart then return end
-    if auraMode == "Encode" then
+    if vals.auraMode == "Encode" then
         if proxyRemote and seedVal then
             local rId = tonumber(proxyRemote:GetAttribute("Id"))
             if rId then
@@ -344,7 +358,7 @@ local function performHit()
                 hitRemoteDirect:FireServer(firstPart, multiTargets, nil, generateID())
             end)
         end
-    elseif auraMode == "Unencode" then
+    elseif vals.auraMode == "Unencode" then
         if attackRemoteDirect and hitRemoteDirect then
             pcall(function()
                 attackRemoteDirect:FireServer()
@@ -356,8 +370,8 @@ end
 
 local function applyFastM1()
     if not char then return end
-    char:SetAttribute("AttackSpeedMultiplier", fastM1Enabled and fastMeleeMultiplier or 1)
-    char:SetAttribute("FruitTAPCooldown", fastM1Enabled and fastFruitMultiplier or 1)
+    char:SetAttribute("AttackSpeedMultiplier", flags.fastM1 and fastMeleeMultiplier or 1)
+    char:SetAttribute("FruitTAPCooldown", flags.fastM1 and fastFruitMultiplier or 1)
 end
 
 local function getCurrentTool()
@@ -405,7 +419,7 @@ end
 local function spamFruit()
     if not auraFruitEnabled then return end
     local now = tick()
-    if now - lastAttack < auraFruitDelay then return end
+    if now - lastAttack < vals.auraFruitDelay then return end
     lastAttack = now
     local tool, remote = getCurrentTool()
     if not tool or not remote then return end
@@ -413,7 +427,7 @@ local function spamFruit()
     if not target or not char:FindFirstChild("HumanoidRootPart") then return end
     
     local dist = (target.Position - char.HumanoidRootPart.Position).Magnitude
-    if dist > auraFruitRadius then return end
+    if dist > vals.auraFruitRadius then return end
     
     local dir = (target.Position - char.HumanoidRootPart.Position).Unit
     for i = 1, 5 do if selectedAttacks[i] then pcall(function() remote:FireServer(dir, i, true) end) end end
@@ -428,7 +442,7 @@ local function updateBoatSpeeds()
     local count = 0
     for _, b in workspace.Boats:GetChildren() do
         local vs = b:FindFirstChild("VehicleSeat")
-        if vs and vs:IsA("VehicleSeat") then vs.MaxSpeed = boatSpeed; count += 1 end
+        if vs and vs:IsA("VehicleSeat") then vs.MaxSpeed = vals.flyBoatSpeed; count += 1 end
     end
     if boatStatusLabel then
         if count > 0 then boatStatusLabel.Text = "✅ Đang tăng tốc: "..count.." thuyền" boatStatusLabel.TextColor3 = THEME.GREEN
@@ -724,39 +738,39 @@ addSection(TabBlox, "Blox Fruit Config")
 local combatConfig = addCollapsible(TabBlox, "Config")
 
 -- 1. Auto Equip
-ui_controls.autoEquip = addDropdown(combatConfig, "Auto Equip Weapon", {"Melee", "Sword", "Blox Fruit"}, "Melee", function(v) autoEquipType = v end)
+ui_controls.autoEquip = addDropdown(combatConfig, "Auto Equip Weapon", {"Melee", "Sword", "Blox Fruit"}, "Melee", function(v) vals.autoEquipType = v end)
 
 -- 2. Aura Melee (Fast Attack)
 addSection(combatConfig, "Aura Melee")
 ui_controls.auraEnabled = addToggle(combatConfig, "Enabled", true, function(v) auraEnabled = v if v then auraConnection = RunService.Heartbeat:Connect(performHit) elseif auraConnection then auraConnection:Disconnect() auraConnection = nil end end)
 if auraEnabled then auraConnection = RunService.Heartbeat:Connect(performHit) end
-ui_controls.auraRadius = addSlider(combatConfig, "Range", 5, 1000, 1000, 0, function(v) auraRadius = v end)
-ui_controls.auraDelay = addSlider(combatConfig, "Delay", 0.01, 1, 0.01, 2, function(v) auraDelay = v end)
-ui_controls.auraMode = addDropdown(combatConfig, "Mode", {"Fast Attack Unencode", "Fast Attack Encode"}, "Fast Attack Unencode", function(v) auraMode = v:find("Encode") and "Encode" or "Unencode" end)
+ui_controls.auraRadius = addSlider(combatConfig, "Range", 5, 1000, 1000, 0, function(v) vals.auraRadius = v end)
+ui_controls.auraDelay = addSlider(combatConfig, "Delay", 0.01, 1, 0.01, 2, function(v) vals.auraDelay = v end)
+ui_controls.auraMode = addDropdown(combatConfig, "Mode", {"Fast Attack Unencode", "Fast Attack Encode"}, "Fast Attack Unencode", function(v) vals.auraMode = v:find("Encode") and "Encode" or "Unencode" end)
 
 -- 3. Aura Fruit (Fast Attack Fruit)
 addSection(combatConfig, "Aura Fruit")
 ui_controls.fruitEnabled = addToggle(combatConfig, "Enabled", true, function(v) auraFruitEnabled = v if v then spamConnection = RunService.Heartbeat:Connect(spamFruit) elseif spamConnection then spamConnection:Disconnect() spamConnection = nil end end)
 if auraFruitEnabled then spamConnection = RunService.Heartbeat:Connect(spamFruit) end
-ui_controls.fruitDelay = addSlider(combatConfig, "Delay", 0.01, 10, 0.01, 2, function(v) auraFruitDelay = v end)
+ui_controls.fruitDelay = addSlider(combatConfig, "Delay", 0.01, 1, 0.01, 2, function(v) vals.auraFruitDelay = v end)
 addDropdown(combatConfig, "Select Skill", {"Skill 1", "Skill 2", "Skill 3", "Skill 4", "Skill 5"}, "Skill 1", function(v) local s = tonumber(v:match("%d+")) for i = 1, 5 do selectedAttacks[i] = (i == s) end end)
 
 -- 4. Auto Ability
 addSection(combatConfig, "Auto Ability")
-ui_controls.autoRaceV3 = addToggle(combatConfig, "Auto Race V3", false, function(v) autoRaceV3Enabled = v end)
-ui_controls.autoActiveV4 = addToggle(combatConfig, "Auto Active V4", false, function(v) autoActiveV4Enabled = v end)
-ui_controls.autoBuso = addToggle(combatConfig, "Auto Buso", true, function(v) autoBusoEnabled = v end)
+ui_controls.autoRaceV3 = addToggle(combatConfig, "Auto Race V3", false, function(v) flags.autoRaceV3 = v end)
+ui_controls.autoActiveV4 = addToggle(combatConfig, "Auto Active V4", false, function(v) flags.autoActiveV4 = v end)
+ui_controls.autoBuso = addToggle(combatConfig, "Auto Buso", true, function(v) flags.autoBuso = v end)
 
 -- 5. Fast M1
 addSection(combatConfig, "Fast M1")
-ui_controls.fastM1Enabled = addToggle(combatConfig, "Enable Fast M1", false, function(v) fastM1Enabled = v applyFastM1() end)
+ui_controls.fastM1Enabled = addToggle(combatConfig, "Enable Fast M1", false, function(v) flags.fastM1 = v applyFastM1() end)
 ui_controls.fastMelee = addSlider(combatConfig, "Melee/Gun Multi", 1, 5, 1, 0, function(v) fastMeleeMultiplier = math.floor(v + 0.5) applyFastM1() end)
 ui_controls.fastFruit = addSlider(combatConfig, "Fruit Multi", 1, 5, 1, 0, function(v) fastFruitMultiplier = math.floor(v + 0.5) applyFastM1() end)
 
 -- 6. Bone Farm
 local boneFarmConfig = addCollapsible(TabSpecialFarm, "Bone Farm")
-ui_controls.autoFarmBones = addToggle(boneFarmConfig, "Auto Farm Bones", false, function(v) autoFarmBonesEnabled = v end)
-ui_controls.autoTradeBones = addToggle(boneFarmConfig, "Auto Trade Bones", false, function(v) autoTradeBonesEnabled = v end)
+ui_controls.autoFarmBones = addToggle(boneFarmConfig, "Auto Farm Bones", false, function(v) flags.autoFarmBones = v end)
+ui_controls.autoTradeBones = addToggle(boneFarmConfig, "Auto Trade Bones", false, function(v) flags.autoTradeBones = v end)
 
 local secretIslandList = addCollapsible(TabBlox, "Secret Island")
 ui_controls.mirageEsp = addToggle(secretIslandList, "Mirage Island ESP", false, function(v) islandEspSettings.ESP_List["Mirage Island"] = v end)
@@ -771,12 +785,12 @@ ui_controls.tweenPrehistoric = addToggle(secretIslandList, "Tween Prehistoric Is
 ui_controls.tweenSpeed = addSlider(secretIslandList, "Tween Speed", 200, 500, 360, 0, function(v) islandTweenSpeed = v end)
 
 addSection(secretIslandList, "Auto Chest Mirage")
-ui_controls.autoChest = addToggle(secretIslandList, "Enabled Auto Chest", false, function(v) autoChestMirage = v end)
-ui_controls.autoChestStyle = addDropdown(secretIslandList, "Chest Style", {"TP", "Tween"}, "Tween", function(v) autoChestStyle = v end)
-ui_controls.autoChestType = addDropdown(secretIslandList, "Chest Type", {"All", "Fragment", "Mirage"}, "All", function(v) autoChestType = v end)
+ui_controls.autoChest = addToggle(secretIslandList, "Enabled Auto Chest", false, function(v) vals.autoChestMirage = v end)
+ui_controls.autoChestStyle = addDropdown(secretIslandList, "Chest Style", {"TP", "Tween"}, "Tween", function(v) vals.autoChestStyle = v end)
+ui_controls.autoChestType = addDropdown(secretIslandList, "Chest Type", {"All", "Fragment", "Mirage"}, "All", function(v) vals.autoChestType = v end)
 
 local trialSection = addCollapsible(TabBlox, "Trial")
-ui_controls.autoUpgradeRace = addToggle(trialSection, "Auto Upgrade Race", false, function(v) autoUpgradeRaceEnabled = v end)
+ui_controls.autoUpgradeRace = addToggle(trialSection, "Auto Upgrade Race", false, function(v) flags.autoUpgradeRace = v end)
 addButton(trialSection, "TP On Top Great Tree", THEME.ACCENT, function()
     pcall(function()
         task.spawn(function()
@@ -800,7 +814,7 @@ addButton(trialSection, "TP On Top Great Tree", THEME.ACCENT, function()
                     for _, v in ipairs(characterParts) do v.CanCollide = false end
                     
                     local dist = (hrp.Position - treePos).Magnitude
-                    local speed = islandTweenSpeed or 360
+                    local speed = vals.islandTweenSpeed or 360
                     local moveDist = math.min(speed * dt, dist)
                     local direction = (treePos - hrp.Position).Unit
                     if direction.X == direction.X then 
@@ -828,7 +842,7 @@ addButton(trialSection, "TP to Ancient One", THEME.ACCENT, function()
                     for _, v in ipairs(characterParts) do v.CanCollide = false end
                     
                     local dist = (hrp.Position - targetPos).Magnitude
-                    local speed = islandTweenSpeed or 360
+                    local speed = vals.islandTweenSpeed or 360
                     local moveDist = math.min(speed * dt, dist)
                     local direction = (targetPos - hrp.Position).Unit
                     
@@ -872,42 +886,43 @@ addButton(trialSection, "TP to Clocks", THEME.ACCENT, function()
     end)
 end)
 
--- SPECIAL FARM TAB
-local bossFarmList = addCollapsible(TabSpecialFarm, "Auto Boss Config")
-ui_controls.autoBoss = addToggle(bossFarmList, "Auto Boss", false, function(v) autoBossEnabled = v if not v then autoBossTargetObj = nil end end)
-ui_controls.autoBossHop = addToggle(bossFarmList, "Auto Boss (Hop Server)", false, function(v) autoBossHopEnabled = v end)
-ui_controls.customBoss = addToggle(bossFarmList, "Custom Boss (Selection)", false, function(v) 
-    customBossEnabled = v 
-    if ui_controls.bossSelectFrame then ui_controls.bossSelectFrame.Visible = v end
-end)
+do -- SPECIAL FARM TAB
+    local bossFarmList = addCollapsible(TabSpecialFarm, "Auto Boss Config")
+    ui_controls.autoBoss = addToggle(bossFarmList, "Auto Boss", false, function(v) flags.autoBoss = v if not v then autoBossTargetObj = nil end end)
+    ui_controls.autoBossHop = addToggle(bossFarmList, "Auto Boss (Hop Server)", false, function(v) flags.autoBossHop = v end)
+    ui_controls.customBoss = addToggle(bossFarmList, "Custom Boss (Selection)", false, function(v) 
+        flags.customBoss = v 
+        if ui_controls.bossSelectFrame then ui_controls.bossSelectFrame.Visible = v end
+    end)
 
-local autoCakeSection = addCollapsible(TabSpecialFarm, "Auto Cake Princess")
-ui_controls.autoCakeFarm = addToggle(autoCakeSection, "Auto Farm Cake Mobs", false, function(v) autoCakePrinceEnabled = v if not v then autoCakeTargetObj = nil end end)
-ui_controls.autoCakeSpawn = addToggle(autoCakeSection, "Auto Spawn Cake Princess", false, function(v) autoSpawnCakePrince = v end)
+    local bossSelectContainer = addCollapsible(bossFarmList, "Select Bosses")
+    ui_controls.bossSelectFrame = bossSelectContainer.Parent
+    ui_controls.bossSelectFrame.Visible = false
 
-local bossSelectContainer = addCollapsible(bossFarmList, "Select Bosses")
-ui_controls.bossSelectFrame = bossSelectContainer.Parent
-ui_controls.bossSelectFrame.Visible = false
-
-local function refreshBossList()
-    for _, child in ipairs(bossSelectContainer:GetChildren()) do
-        if not child:IsA("UIListLayout") then child:Destroy() end
-    end
-    local spawns = workspace:FindFirstChild("_WorldOrigin") and workspace._WorldOrigin:FindFirstChild("EnemySpawns")
-    if spawns then
-        for _, v in ipairs(spawns:GetChildren()) do
-            if v.Name:find("%[Boss%]") then
-                local bName = v.Name
-                if not selectedBosses[bName] then selectedBosses[bName] = false end
-                addToggle(bossSelectContainer, bName, selectedBosses[bName], function(en)
-                    selectedBosses[bName] = en
-                end)
+    local function refreshBossList()
+        for _, child in ipairs(bossSelectContainer:GetChildren()) do
+            if not child:IsA("UIListLayout") then child:Destroy() end
+        end
+        local spawns = workspace:FindFirstChild("_WorldOrigin") and workspace._WorldOrigin:FindFirstChild("EnemySpawns")
+        if spawns then
+            for _, v in ipairs(spawns:GetChildren()) do
+                if v.Name:find("%[Boss%]") then
+                    local bName = v.Name
+                    if not selectedBosses[bName] then selectedBosses[bName] = false end
+                    addToggle(bossSelectContainer, bName, selectedBosses[bName], function(en)
+                        selectedBosses[bName] = en
+                    end)
+                end
             end
         end
     end
+    refreshBossList()
+    addButton(bossFarmList, "Refresh Boss List", THEME.ACCENT, function() refreshBossList() end)
+
+    local katakuriConfig = addCollapsible(TabSpecialFarm, "Katakuri (Cake Prince) Farm")
+    ui_controls.autoCakeFarm = addToggle(katakuriConfig, "Auto Farm Katakuri", false, function(v) flags.autoCakeFarm = v if not v then autoCakeTargetObj = nil end end)
+    ui_controls.autoCakeSpawn = addToggle(katakuriConfig, "Auto Spawn Katakuri", false, function(v) flags.autoCakeSpawn = v end)
 end
-refreshBossList()
-addButton(bossFarmList, "Refresh Boss List", THEME.ACCENT, function() refreshBossList() end)
 
 local cache = { mirage = nil, kitsune = nil, prehistoric = nil, chest = nil, lastScan = 0, boatTarget = nil, boatParts = {}, touchedChests = {}, lastLootTime = 0, dState = "", dTick = 0, lastDeath = 0 }
 local function updateCharParts()
@@ -950,7 +965,7 @@ RunService.Heartbeat:Connect(function(dt)
 
     -- Per-Frame Smooth Logic (Lerp/Tween/Fly)
 
-    for name, enabled in islandTweenEnabled do
+    for name, enabled in pairs(islandFlags) do
         if enabled then
             local obj = (name == "Mirage Island" and cache.mirage) or (name == "Kitsune Island" and cache.kitsune) or (name == "Prehistoric Island" and cache.prehistoric)
             if obj then
@@ -961,7 +976,7 @@ RunService.Heartbeat:Connect(function(dt)
                     local target = posPart.Position + Vector3.new(0, 250, 0)
                     local dist = (hrp.Position - target).Magnitude
                     if dist > 5 then
-                        local alpha = math.min((islandTweenSpeed * dt) / dist, 1)
+                        local alpha = math.min((vals.islandTweenSpeed * dt) / dist, 1)
                         hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(hrp.Position, target) * CFrame.new(0, 0, -dist), alpha)
                     end
                 end
@@ -1004,14 +1019,15 @@ RunService.Heartbeat:Connect(function(dt)
             local targetPos = miragePos + Vector3.new(0, 250, 0)
             if (hrp.Position - targetPos).Magnitude > 5 then
                 local alpha = math.min((islandTweenSpeed * dt) / (hrp.Position - targetPos).Magnitude, 1)
+                local alpha = math.min((vals.islandTweenSpeed * dt) / (hrp.Position - targetPos).Magnitude, 1)
                 hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(hrp.Position, targetPos) * CFrame.new(0, 0, -(hrp.Position - targetPos).Magnitude), alpha)
             end
         end
     end
 
-    if flyBoatEnabled and currentBoat and currentBoat.Parent then
+    if flags.flyBoat and currentBoat and currentBoat.Parent then
         local seat = currentBoat:FindFirstChildOfClass("VehicleSeat") or currentBoat:FindFirstChild("VehicleSeat", true)
-        isPlayerOnBoat = (seat and seat.Occupant ~= nil)
+        local isPlayerOnBoat = (seat and seat.Occupant ~= nil)
         if isPlayerOnBoat then
             if not cache.boatTarget then cache.boatTarget = hrp.Position end
             if #cache.boatParts == 0 then for _, v in ipairs(currentBoat:GetDescendants()) do if v:IsA("BasePart") then table.insert(cache.boatParts, v) end end end
@@ -1020,10 +1036,10 @@ RunService.Heartbeat:Connect(function(dt)
             if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.CFrame.LookVector end
             if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.CFrame.RightVector end
             if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.CFrame.RightVector end
-            if moveDir.Magnitude > 0 then cache.boatTarget = cache.boatTarget + (moveDir.Unit * flyBoatSpeed * dt) end
+            if moveDir.Magnitude > 0 then cache.boatTarget = cache.boatTarget + (moveDir.Unit * vals.flyBoatSpeed * dt) end
             for _, v in ipairs(cache.boatParts) do v.Anchored, v.Velocity, v.RotVelocity = false, Vector3.zero, Vector3.zero end
-            if flyBoatStyle == "Custom" then hrp.CFrame = CFrame.lookAt(cache.boatTarget, cache.boatTarget + cam.CFrame.LookVector)
-            else cache.boatTarget = Vector3.new(cache.boatTarget.X, flyBoatHeight, cache.boatTarget.Z) hrp.CFrame = CFrame.new(cache.boatTarget) * CFrame.lookAt(Vector3.zero, Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z)).Rotation end
+            if vals.flyBoatStyle == "Custom" then hrp.CFrame = CFrame.lookAt(cache.boatTarget, cache.boatTarget + cam.CFrame.LookVector)
+            else cache.boatTarget = Vector3.new(cache.boatTarget.X, vals.flyBoatHeight, cache.boatTarget.Z) hrp.CFrame = CFrame.new(cache.boatTarget) * CFrame.lookAt(Vector3.zero, Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z)).Rotation end
         else
             cache.boatTarget = (currentBoat.PrimaryPart or currentBoat:FindFirstChildWhichIsA("BasePart")).Position
             for _, v in ipairs(cache.boatParts) do if not v.Anchored then v.Anchored = true end end
@@ -1031,14 +1047,14 @@ RunService.Heartbeat:Connect(function(dt)
     end
 
     -- Combat & Movement
-    if fastM1Enabled then applyFastM1() end
-    if tpEnabled and hum and hum.MoveDirection.Magnitude > 0 then
-        local extra = (tpSpeed - 1) * hum.WalkSpeed
+    if flags.fastM1 then applyFastM1() end
+    if flags.tpEnabled and hum and hum.MoveDirection.Magnitude > 0 then
+        local extra = (vals.tpSpeed - 1) * hum.WalkSpeed
         if extra > 0 then hrp.CFrame = hrp.CFrame + (hum.MoveDirection * extra * dt) end
     end
     
-    if waterWalkEnabled then
-        if antiWaterEnabled and hrp.Position.Y < antiWaterThreshold then
+    if flags.waterWalk then
+        if flags.antiWater and hrp.Position.Y < vals.antiWaterThreshold then
             hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
             hrp.CFrame = CFrame.new(hrp.Position.X, 1, hrp.Position.Z)
         end
@@ -1051,15 +1067,15 @@ RunService.Heartbeat:Connect(function(dt)
         lastFoamState = false
     end
     
-    if infinityJumpEnabled then char:SetAttribute("SkyjumpBoost", 3000) end
-    if dashLengthValue > 0 then char:SetAttribute("DashLength", dashLengthValue) end
+    if flags.infinityJump then char:SetAttribute("SkyjumpBoost", 3000) end
+    if vals.dashLength > 0 then char:SetAttribute("DashLength", vals.dashLength) end
     if hum then 
-        if jumpHeightEnabled then hum.UseJumpPower, hum.JumpHeight = false, jumpHeightValue
+        if flags.jumpHeight then hum.UseJumpPower, hum.JumpHeight = false, vals.jumpHeight
         else hum.UseJumpPower = true end
     end
 
     -- Auto Boss Tween (Real-time tracking)
-    if autoBossEnabled and autoBossTargetObj then
+    if flags.autoBoss and autoBossTargetObj then
         local tH = autoBossTargetObj:IsA("Model") and autoBossTargetObj:FindFirstChildOfClass("Humanoid")
         if tH and tH.Health <= 0 then autoBossTargetObj = nil return end
         
@@ -1067,7 +1083,7 @@ RunService.Heartbeat:Connect(function(dt)
         if targetPart then
             for _, v in ipairs(characterParts) do v.CanCollide = false end
             hrp.Velocity = Vector3.new(0, 0, 0)
-            local targetPos = targetPart.Position + Vector3.new(0, safeHeight, 0)
+            local targetPos = targetPart.Position + Vector3.new(0, vals.safeHeight, 0)
             local dist = (hrp.Position - targetPos).Magnitude
             if dist > 0.5 then
                 local speed = (dist < 140) and 1300 or 360
@@ -1076,7 +1092,7 @@ RunService.Heartbeat:Connect(function(dt)
                 if direction.X == direction.X then hrp.CFrame = hrp.CFrame + (direction * moveDist) end
             end
         end
-    elseif autoFarmBonesEnabled and autoBoneTargetObj then
+    elseif flags.autoFarmBones and autoBoneTargetObj then
         local tH = autoBoneTargetObj:IsA("Model") and autoBoneTargetObj:FindFirstChildOfClass("Humanoid")
         if tH and tH.Health <= 0 then autoBoneTargetObj = nil return end
         
@@ -1084,7 +1100,7 @@ RunService.Heartbeat:Connect(function(dt)
         if targetPart then
             for _, v in ipairs(characterParts) do v.CanCollide = false end
             hrp.Velocity = Vector3.new(0, 0, 0)
-            local targetPos = targetPart.Position + Vector3.new(0, safeHeight, 0)
+            local targetPos = targetPart.Position + Vector3.new(0, vals.safeHeight, 0)
             local dist = (hrp.Position - targetPos).Magnitude
             if dist > 0.5 then
                 local speed = (dist < 140) and 1300 or 360
@@ -1093,7 +1109,7 @@ RunService.Heartbeat:Connect(function(dt)
                 if direction.X == direction.X then hrp.CFrame = hrp.CFrame + (direction * moveDist) end
             end
         end
-    elseif autoCakePrinceEnabled and autoCakeTargetObj then
+    elseif flags.autoCakeFarm and autoCakeTargetObj then
         local tH = autoCakeTargetObj:IsA("Model") and autoCakeTargetObj:FindFirstChildOfClass("Humanoid")
         if tH and tH.Health <= 0 then autoCakeTargetObj = nil return end
         
@@ -1101,7 +1117,7 @@ RunService.Heartbeat:Connect(function(dt)
         if targetPart then
             for _, v in ipairs(characterParts) do v.CanCollide = false end
             hrp.Velocity = Vector3.new(0, 0, 0)
-            local targetPos = targetPart.Position + Vector3.new(0, safeHeight, 0)
+            local targetPos = targetPart.Position + Vector3.new(0, vals.safeHeight, 0)
             local dist = (hrp.Position - targetPos).Magnitude
             if dist > 0.5 then
                 local speed = (dist < 140) and 1300 or 360
@@ -1118,7 +1134,7 @@ end)
 task.spawn(function()
     while true do
         local dt = task.wait(0.1)
-        if autoDungeonEnabled and char and char:FindFirstChild("HumanoidRootPart") then
+        if flags.autoDungeon and char and char:FindFirstChild("HumanoidRootPart") then
             pcall(function()
                 local myHRP = char.HumanoidRootPart
                 local dungeonMap = workspace.Map:FindFirstChild("Dungeon")
@@ -1168,7 +1184,7 @@ task.spawn(function()
         end
 
         -- Logic Auto Boss Selector
-        if autoBossEnabled and char and char:FindFirstChild("HumanoidRootPart") then
+        if flags.autoBoss and char and char:FindFirstChild("HumanoidRootPart") then
             pcall(function()
                 local myHRP = char.HumanoidRootPart
                 local foundTarget = nil
@@ -1192,7 +1208,7 @@ task.spawn(function()
                     local cn = e.Name:gsub("%[.-%]", ""):match("^%s*(.-)%s*$")
                     local fullName = masterBossList[cn] or (e.Name:find("%[Boss%]") and e.Name)
                     if fullName then
-                        if not customBossEnabled or selectedBosses[fullName] then
+                        if not flags.customBoss or selectedBosses[fullName] then
                             local hum = e:FindFirstChildOfClass("Humanoid")
                             if hum and hum.Health > 0 then
                                 local d = (myHRP.Position - e.HumanoidRootPart.Position).Magnitude
@@ -1216,7 +1232,7 @@ task.spawn(function()
                     if spawns then
                         for _, s in ipairs(spawns:GetChildren()) do
                             if s.Name:find("%[Boss%]") then
-                                if not customBossEnabled or selectedBosses[s.Name] then
+                                if not flags.customBoss or selectedBosses[s.Name] then
                                     local d = (myHRP.Position - s.Position).Magnitude
                                     if d < minSpawnDist then
                                         minSpawnDist = d
@@ -1232,7 +1248,7 @@ task.spawn(function()
                         lastBossDeadTime = 0
                     else
                         autoBossTargetObj = nil
-                        if autoBossHopEnabled then
+                        if flags.autoBossHop then
                             if lastBossDeadTime == 0 then lastBossDeadTime = tick() end
                             if tick() - lastBossDeadTime > 5 then
                                 executeHop()
@@ -1245,7 +1261,7 @@ task.spawn(function()
         end
 
         -- Logic Auto Farm Bones Selector
-        if autoFarmBonesEnabled and char and char:FindFirstChild("HumanoidRootPart") then
+        if flags.autoFarmBones and char and char:FindFirstChild("HumanoidRootPart") then
             pcall(function()
                 local myHRP = char.HumanoidRootPart
                 local foundTarget = nil
@@ -1282,57 +1298,76 @@ task.spawn(function()
                     autoBoneTargetObj = spawnTarget
                 end
             end)
-        end
+        else autoBoneTargetObj = nil end
 
-        -- Logic Auto Farm Cake Princess Selector
-        if autoCakePrinceEnabled and char and char:FindFirstChild("HumanoidRootPart") then
+        -- Logic Auto Cake Prince Selector
+        if flags.autoCakeFarm and char and char:FindFirstChild("HumanoidRootPart") then
             pcall(function()
                 local myHRP = char.HumanoidRootPart
                 local foundTarget = nil
-                local minTargetDist = math.huge
                 local enemies = workspace:FindFirstChild("Enemies")
-                local function isTarget(n)
-                    for _, m in ipairs(cakeMobs) do if n:find(m) then return true end end
-                    return false
-                end
-                if enemies then
-                    for _, e in ipairs(enemies:GetChildren()) do
-                        if isTarget(e.Name) then
-                            local hum = e:FindFirstChildOfClass("Humanoid")
-                            if hum and hum.Health > 0 and e:FindFirstChild("HumanoidRootPart") then
-                                local d = (myHRP.Position - e.HumanoidRootPart.Position).Magnitude
-                                local isBoss = e.Name == "Cake Prince"
-                                if (isBoss and 0 or d) < minTargetDist then 
-                                    minTargetDist = (isBoss and 0 or d)
-                                    foundTarget = e 
-                                end
-                                if isBoss then break end
+                local map = workspace:FindFirstChild("Map")
+                local mirrorDimension = map and map:FindFirstChild("MirrorDimension")
+                
+                local function findCakeMob(name)
+                    if enemies then
+                        for _, e in ipairs(enemies:GetChildren()) do
+                            if e.Name:find(name) then
+                                local hum = e:FindFirstChildOfClass("Humanoid")
+                                if hum and hum.Health > 0 and e:FindFirstChild("HumanoidRootPart") then return e end
                             end
                         end
                     end
+                    return nil
                 end
-                if foundTarget then autoCakeTargetObj = foundTarget
+
+                if mirrorDimension then
+                    foundTarget = findCakeMob("Cake Prince")
+                    if not foundTarget then
+                        foundTarget = mirrorDimension.PrimaryPart or mirrorDimension:FindFirstChildWhichIsA("BasePart") or mirrorDimension
+                    end
                 else
-                    local spawnTarget = nil
-                    local minSpawnDist = math.huge
-                    local spawns = workspace:FindFirstChild("_WorldOrigin") and workspace._WorldOrigin:FindFirstChild("EnemySpawns")
-                    if spawns then
-                        for _, s in ipairs(spawns:GetChildren()) do
-                            if isTarget(s.Name) then
-                                local d = (myHRP.Position - s.Position).Magnitude
-                                if d < minSpawnDist then minSpawnDist = d; spawnTarget = s end
+                    local minTargetDist = math.huge
+                    if enemies then
+                        for _, e in ipairs(enemies:GetChildren()) do
+                            local nameMatch = false
+                            for i = 2, #cakeMobs do -- Index 2 to 5 are normal mobs
+                                if e.Name:find(cakeMobs[i]) then nameMatch = true break end
+                            end
+                            if nameMatch then
+                                local hum = e:FindFirstChildOfClass("Humanoid")
+                                if hum and hum.Health > 0 and e:FindFirstChild("HumanoidRootPart") then
+                                    local d = (myHRP.Position - e.HumanoidRootPart.Position).Magnitude
+                                    if d < minTargetDist then minTargetDist = d; foundTarget = e end
+                                end
                             end
                         end
                     end
-                    autoCakeTargetObj = spawnTarget
+                    
+                    if not foundTarget then
+                        local spawns = workspace:FindFirstChild("_WorldOrigin") and workspace._WorldOrigin:FindFirstChild("EnemySpawns")
+                        if spawns then
+                            local minSpawnDist = math.huge
+                            for _, s in ipairs(spawns:GetChildren()) do
+                                local nameMatch = false
+                                for i = 2, #cakeMobs do
+                                    if s.Name:find(cakeMobs[i]) then nameMatch = true break end
+                                end
+                                if nameMatch then
+                                    local d = (myHRP.Position - s.Position).Magnitude
+                                    if d < minSpawnDist then minSpawnDist = d; foundTarget = s end
+                                end
+                            end
+                        end
+                    end
                 end
+                autoCakeTargetObj = foundTarget
             end)
-        end
-        else autoBoneTargetObj = nil end
+        else autoCakeTargetObj = nil end
 
         -- Sync Auto Equip (0.1s)
         if char and char:FindFirstChild("HumanoidRootPart") then
-            local target = autoBossTargetObj or autoBoneTargetObj
+            local target = autoBossTargetObj or autoBoneTargetObj or autoCakeTargetObj
             if target then
                 local tPart = target:IsA("Model") and (target.PrimaryPart or target:FindFirstChild("HumanoidRootPart") or target:FindFirstChildWhichIsA("BasePart")) or target
                 if tPart and (char.HumanoidRootPart.Position - tPart.Position).Magnitude < 150 then
@@ -1352,7 +1387,7 @@ task.spawn(function()
                             end)
                         end
                     end
-                    equip(autoEquipType)
+                    equip(vals.autoEquipType)
                 end
             end
         end
@@ -1366,22 +1401,27 @@ task.spawn(function()
     while true do
         task.wait(0.5)
         local root = char and char:FindFirstChild("HumanoidRootPart")
-        if root then safeHeight = (root:FindFirstChild("Buddha") or root:FindFirstChild("Buddha2")) and 35 or 15 end
-        if autoBusoEnabled and char and not char:FindFirstChild("HasBuso") then pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("Buso") end) end
+        if root then vals.safeHeight = (root:FindFirstChild("Buddha") or root:FindFirstChild("Buddha2")) and 35 or 15 end
+        if flags.autoBuso and char then 
+            pcall(function() 
+                local rem = GetCommF()
+                if rem and not char:FindFirstChild("HasBuso") then rem:InvokeServer("Buso") end
+            end) 
+        end
         for t, e in pairs(hitboxEnabled) do if e then expandHitbox(t) end end
         updateBoatSpeeds()
         updateIslandESP()
-        if autoChestMirage or islandEspSettings.Enabled then
+        if vals.autoChestMirage or islandEspSettings.Enabled then
             cache.mirage = findIsland("Mirage Island")
             cache.kitsune = findIsland("Kitsune Island")
             cache.prehistoric = findIsland("Prehistoric Island")
-            if autoChestMirage and cache.mirage then
+            if vals.autoChestMirage and cache.mirage then
                 local chestFolder = workspace:FindFirstChild("ChestModels")
                 if chestFolder then
                     for _, chest in ipairs(chestFolder:GetChildren()) do
                         if not cache.touchedChests[chest] then
                             local n = chest.Name:lower()
-                            if (autoChestType == "All") or (autoChestType == "Fragment" and n:find("fragment")) or (autoChestType == "Mirage" and n:find("mirage")) then
+                            if (vals.autoChestType == "All") or (vals.autoChestType == "Fragment" and n:find("fragment")) or (vals.autoChestType == "Mirage" and n:find("mirage")) then
                                 local p = chest:FindFirstChildWhichIsA("BasePart") or chest.PrimaryPart
                                 if p then cache.chest = p; break end
                             end
@@ -1394,117 +1434,135 @@ task.spawn(function()
     end
 end)
 
-local lpList = addCollapsible(TabBlox, "LocalPlayer")
-addToggle(lpList, "Infinity Sky Jump", false, function(v) infinityJumpEnabled = v if not v and char then char:SetAttribute("SkyjumpBoost", nil) end end)
-addToggle(lpList, "Jump Height Enabled", false, function(v) jumpHeightEnabled = v end)
-addSlider(lpList, "Jump Height", 7.2, 1000, 7.2, 1, function(v) jumpHeightValue = v end)
-addSlider(lpList, "Dash Length", 0, 500, 0, 1, function(v) dashLengthValue = v end)
-ui_controls.waterWalk = addToggle(lpList, "Water Walk", true, function(v) waterWalkEnabled = v end)
-ui_controls.antiWater = addToggle(lpList, "Anti Water", true, function(v) antiWaterEnabled = v end)
-
-local fruitSection = addCollapsible(TabBlox, "Fruit")
-local function storeAllFruits()
-    if not char then return end
-    local items = {}
-    for _, v in player.Backpack:GetChildren() do table.insert(items, v) end
-    for _, v in char:GetChildren() do table.insert(items, v) end
-    
-    for _, item in items do
-        if item:IsA("Tool") and item.Name:lower():find("fruit") then
-            local baseName = item.Name:gsub(" Fruit", ""):gsub(" ", "")
-            local formattedName = baseName .. "-" .. baseName
-            pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("StoreFruit", formattedName, item) end)
+-- CAKE PRINCE SPAWNER LOOP
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if flags.autoCakeSpawn then
+            pcall(function()
+                ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("CakePrinceSpawner", true)
+                task.wait(0.1)
+                ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("CakePrinceSpawner")
+            end)
         end
     end
-end
-ui_controls.autoStoreFruit = addToggle(fruitSection, "Auto Store Fruit", false, function(v) autoStoreFruitEnabled = v end)
-addButton(fruitSection, "Store All Fruits (1 Click)", THEME.ACCENT, function() storeAllFruits() end)
-ui_controls.autoRandomFruit = addToggle(fruitSection, "Auto Random Fruit", false, function(v) autoRandomFruitEnabled = v end)
-addButton(fruitSection, "Random Fruit (1 Click)", THEME.ACCENT, function() pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("Cousin", "Buy", "DLCBoxData") end) end)
+end)
 
-local seaEventList = addCollapsible(TabBlox, "Sea Event")
-local boatStatusF = Instance.new("Frame", seaEventList)
-boatStatusF.Size = UDim2.new(1, 0, 0, 25) boatStatusF.BackgroundTransparency = 1
-boatStatusLabel = Instance.new("TextLabel", boatStatusF)
-boatStatusLabel.Size = UDim2.new(1, 0, 1, 0) boatStatusLabel.BackgroundTransparency = 1
-boatStatusLabel.Text = "🔍 Quét thuyền..." boatStatusLabel.TextColor3 = THEME.TEXT_DIM boatStatusLabel.Font = Enum.Font.Gotham boatStatusLabel.TextSize = 12
-ui_controls.boatSpeed = addSlider(seaEventList, "Boat Speed", 200, 600, 200, 0, function(v) boatSpeed = v updateBoatSpeeds() end)
-addButton(seaEventList, "Buy Marine Boat", THEME.ACCENT, function() pcall(function() if char and char:FindFirstChild("HumanoidRootPart") then char.HumanoidRootPart.CFrame = CFrame.new(-16919, 9, 503) task.wait(0.1) ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("BuyBoat", "MarineGrandBrigade") end end) end)
-addButton(seaEventList, "TP Boat to Player", THEME.ACCENT, function()
-    pcall(function()
-        local boats = workspace:FindFirstChild("Boats")
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if boats and hrp then
-            for _, boat in boats:GetChildren() do
-                if boat:FindFirstChild("Owner") and tostring(boat.Owner.Value) == player.Name then
-                    local originalPos = hrp.CFrame
-                    local seat = boat:FindFirstChildOfClass("VehicleSeat") or boat:FindFirstChild("VehicleSeat", true)
-                    if seat then
-                        hrp.CFrame = seat.CFrame + Vector3.new(0, 3, 0)
-                        task.wait(0.2)
-                        hrp.CFrame = originalPos
-                        task.wait(0.1)
-                        if flyBoatEnabled then cache.boatTarget = hrp.Position end
+do -- LOCAL PLAYER TAB
+    local lpList = addCollapsible(TabBlox, "LocalPlayer")
+    addToggle(lpList, "Infinity Sky Jump", false, function(v) flags.infinityJump = v if not v and char then char:SetAttribute("SkyjumpBoost", nil) end end)
+    addToggle(lpList, "Jump Height Enabled", false, function(v) flags.jumpHeight = v end)
+    addSlider(lpList, "Jump Height", 7.2, 1000, 7.2, 1, function(v) vals.jumpHeight = v end)
+    addSlider(lpList, "Dash Length", 0, 500, 0, 1, function(v) vals.dashLength = v end)
+    ui_controls.waterWalk = addToggle(lpList, "Water Walk", true, function(v) flags.waterWalk = v end)
+    ui_controls.antiWater = addToggle(lpList, "Anti Water", true, function(v) flags.antiWater = v end)
+end
+
+do -- FRUIT TAB
+    local fruitSection = addCollapsible(TabBlox, "Fruit")
+    ui_controls.autoStoreFruit = addToggle(fruitSection, "Auto Store Fruit", false, function(v) flags.autoStoreFruit = v end)
+    addButton(fruitSection, "Store All Fruits (1 Click)", THEME.ACCENT, function() storeAllFruits() end)
+    ui_controls.autoRandomFruit = addToggle(fruitSection, "Auto Random Fruit", false, function(v) flags.autoRandomFruit = v end)
+    addButton(fruitSection, "Random Fruit (1 Click)", THEME.ACCENT, function() 
+        pcall(function() 
+            local rem = GetCommF()
+            if rem then rem:InvokeServer("Cousin", "Buy", "DLCBoxData") end
+        end) 
+    end)
+end
+
+do -- SEA EVENT TAB
+    local seaEventList = addCollapsible(TabBlox, "Sea Event")
+    local boatStatusF = Instance.new("Frame", seaEventList)
+    boatStatusF.Size = UDim2.new(1, 0, 0, 25) boatStatusF.BackgroundTransparency = 1
+    local boatStatusLabel = Instance.new("TextLabel", boatStatusF) -- Localize within do block
+    boatStatusLabel.Size, boatStatusLabel.BackgroundTransparency = UDim2.new(1,0,1,0), 1
+    boatStatusLabel.Text = "🔍 Quét thuyền..." boatStatusLabel.TextColor3 = THEME.TEXT_DIM boatStatusLabel.Font = Enum.Font.Gotham boatStatusLabel.TextSize = 12
+    
+    ui_controls.boatSpeed = addSlider(seaEventList, "Boat Speed", 200, 600, 200, 0, function(v) boatSpeed = v updateBoatSpeeds() end)
+    addButton(seaEventList, "Buy Marine Boat", THEME.ACCENT, function() pcall(function() if char and char:FindFirstChild("HumanoidRootPart") then char.HumanoidRootPart.CFrame = CFrame.new(-16919, 9, 503) task.wait(0.1) ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("BuyBoat", "MarineGrandBrigade") end end) end)
+    
+    addButton(seaEventList, "TP Boat to Player", THEME.ACCENT, function()
+        pcall(function()
+            local boats = workspace:FindFirstChild("Boats")
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if boats and hrp then
+                for _, boat in boats:GetChildren() do
+                    if boat:FindFirstChild("Owner") and tostring(boat.Owner.Value) == player.Name then
+                        local originalPos = hrp.CFrame
+                        local seat = boat:FindFirstChildOfClass("VehicleSeat") or boat:FindFirstChild("VehicleSeat", true)
+                        if seat then
+                            hrp.CFrame = seat.CFrame + Vector3.new(0, 3, 0)
+                            task.wait(0.2)
+                            hrp.CFrame = originalPos
+                            task.wait(0.1)
+                            if flags.flyBoat then cache.boatTarget = hrp.Position end
+                        end
+                        break
                     end
-                    break
                 end
             end
-        end
+        end)
     end)
-end)
-ui_controls.flyboat = addToggle(seaEventList, "flyboat", false, function(v)
-    flyBoatEnabled = v
-    if v then
-        local boats = workspace:FindFirstChild("Boats")
-        if not boats or not char or not char:FindFirstChild("HumanoidRootPart") then flyBoatEnabled = false if ui_controls.flyboat then ui_controls.flyboat.Set(false) end return end
-        local hrp, closest, dist = char.HumanoidRootPart, nil, 200
-        for _, boat in boats:GetChildren() do
-            if boat:IsA("Model") then
-                local part = boat.PrimaryPart or boat:FindFirstChildWhichIsA("BasePart")
-                if part then local d = (part.Position - hrp.Position).Magnitude if d < dist then dist = d; closest = boat end end
+    
+    ui_controls.flyboat = addToggle(seaEventList, "flyboat", false, function(v)
+        flags.flyBoat = v
+        if v then
+            local boats = workspace:FindFirstChild("Boats")
+            if not boats or not char or not char:FindFirstChild("HumanoidRootPart") then flags.flyBoat = false if ui_controls.flyboat then ui_controls.flyboat.Set(false) end return end
+            local hrp, closest, dist = char.HumanoidRootPart, nil, 200
+            for _, boat in boats:GetChildren() do
+                if boat:IsA("Model") then
+                    local part = boat.PrimaryPart or boat:FindFirstChildWhichIsA("BasePart")
+                    if part then local d = (part.Position - hrp.Position).Magnitude if d < dist then dist = d; closest = boat end end
+                end
             end
-        end
-        if closest then 
-            currentBoat = closest
-            local part = currentBoat.PrimaryPart or currentBoat:FindFirstChildWhichIsA("BasePart")
-            cache.boatTarget = part.Position
-        else flyBoatEnabled = false if ui_controls.flyboat then ui_controls.flyboat.Set(false) end end
-    else currentBoat, cache.boatTarget = nil, nil end
-end)
-ui_controls.flyboatSpeed = addSlider(seaEventList, "speed flyboat", 100, 1000, 200, 0, function(v) flyBoatSpeed = v end)
-ui_controls.flyboatHeight = addSlider(seaEventList, "boat height", 20, 600, 125, 0, function(v) flyBoatHeight = v end)
-ui_controls.flyboatStyle = addDropdown(seaEventList, "Fly Style", {"Default", "Custom"}, "Default", function(v) flyBoatStyle = v end)
-addButton(seaEventList, "Remove Rocks", THEME.ACCENT, function()
-    for _, v in workspace:GetDescendants() do
-        if v.Name == "Rocks" then
-            pcall(function() v:ClearAllChildren() end)
-        end
-    end
-end)
+            if closest then 
+                currentBoat = closest
+                local part = currentBoat.PrimaryPart or currentBoat:FindFirstChildWhichIsA("BasePart")
+                cache.boatTarget = part.Position
+            else flags.flyBoat = false if ui_controls.flyboat then ui_controls.flyboat.Set(false) end end
+        else currentBoat, cache.boatTarget = nil, nil end
+    end)
+    
+    ui_controls.flyboatSpeed = addSlider(seaEventList, "speed flyboat", 100, 1000, 200, 0, function(v) vals.flyBoatSpeed = v end)
+    ui_controls.flyboatHeight = addSlider(seaEventList, "boat height", 20, 600, 125, 0, function(v) vals.flyBoatHeight = v end)
+    ui_controls.flyboatStyle = addDropdown(seaEventList, "Fly Style", {"Default", "Custom"}, "Default", function(v) flyBoatStyle = v end)
+    
+    addButton(seaEventList, "Remove Rocks", THEME.ACCENT, function()
+        pcall(function()
+            for _, v in ipairs(workspace:GetDescendants()) do
+                if v.Name == "Rocks" then pcall(function() v:Destroy() end) end
+            end
+        end)
+    end)
+end
 
 local shopList = addCollapsible(TabBlox, "Shop")
 addButton(shopList, "Reset Stat (Buy)", THEME.ACCENT, function()
     pcall(function() ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("BlackbeardReward", "Refund", "2") end)
 end)
 
--- UTILS TAB
-addSection(TabUtils, "Movement")
-local tpWalkList = addCollapsible(TabUtils, "TP Walk")
-ui_controls.tpEnabled = addToggle(tpWalkList, "Enabled", false, function(v) tpEnabled = v end)
-ui_controls.tpSpeed = addSlider(tpWalkList, "Speed Mult", 1, 8, 2, 1, function(v) tpSpeed = v end)
-
-addSection(TabUtils, "Visuals")
-local espList = addCollapsible(TabUtils, "Player ESP")
-ui_controls.espEnabled = addToggle(espList, "Enabled", false, function(v) espSettings.Enabled = v if not v then clearESP() end end)
-ui_controls.espText = addToggle(espList, "Show HP Text", true, function(v) espSettings.ShowText = v end)
-ui_controls.espBar = addToggle(espList, "Show HP Bar", true, function(v) espSettings.ShowBar = v end)
-
-addSection(TabUtils, "Others")
-addButton(TabUtils, "Remove Fog & Effects", THEME.ACCENT, function()
-    for _, v in Lighting:GetChildren() do if v:IsA("Atmosphere") or v.Name:find("Fog") then pcall(function() v:Destroy() end) end end
-    Lighting.FogEnd, Lighting.FogStart, Lighting.GlobalShadows, Lighting.ExposureCompensation = 9e9, 0, false, 1
-end)
-addButton(TabUtils, "Infinite Yield", THEME.ACCENT, function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))() end)
+do -- UTILS TAB
+    addSection(TabUtils, "Movement")
+    local tpWalkList = addCollapsible(TabUtils, "TP Walk")
+    ui_controls.tpEnabled = addToggle(tpWalkList, "Enabled", false, function(v) flags.tpEnabled = v end)
+    ui_controls.tpSpeed = addSlider(tpWalkList, "Speed Mult", 1, 8, 2, 1, function(v) vals.tpSpeed = v end)
+    
+    addSection(TabUtils, "Visuals")
+    local espList = addCollapsible(TabUtils, "Player ESP")
+    ui_controls.espEnabled = addToggle(espList, "Enabled", false, function(v) espSettings.Enabled = v if not v then clearESP() end end)
+    ui_controls.espText = addToggle(espList, "Show HP Text", true, function(v) espSettings.ShowText = v end)
+    ui_controls.espBar = addToggle(espList, "Show HP Bar", true, function(v) espSettings.ShowBar = v end)
+    
+    addSection(TabUtils, "Others")
+    ui_controls.antiAfk = addToggle(TabUtils, "Anti-AFK", true, function(v) flags.antiAfk = v end)
+    addButton(TabUtils, "Remove Fog & Effects", THEME.ACCENT, function()
+        for _, v in Lighting:GetChildren() do if v:IsA("Atmosphere") or v.Name:find("Fog") then pcall(function() v:Destroy() end) end end
+        Lighting.FogEnd, Lighting.FogStart, Lighting.GlobalShadows, Lighting.ExposureCompensation = 9e9, 0, false, 1
+    end)
+    addButton(TabUtils, "Infinite Yield", THEME.ACCENT, function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))() end)
+end
 
 addSection(TabUtils, "Server Hopper")
 local hopFrame = Instance.new("Frame", TabUtils)
@@ -1517,31 +1575,43 @@ addButton(TabUtils, "Small Server Hop", THEME.ACCENT, function() executeHop() en
 addButton(TabUtils, "Old-like (Low Population)", THEME.DARK_ITEM, function() hopToOldServer("4h") end)
 addButton(TabUtils, "Old-like (Fast Scan)", THEME.DARK_ITEM, function() hopToOldServer("3h45") end)
 
-local customIconList = addCollapsible(TabSettings, "Custom Button Icon")
-local helpLabel = Instance.new("TextLabel", customIconList)
-helpLabel.Size, helpLabel.BackgroundTransparency = UDim2.new(1,0,0,80), 1
-helpLabel.Text = "📖 Hướng dẫn lấy ID:\n1. Mở Roblox Website > Create > Dashboard\n2. Chọn Development Items > Decals\n3. Copy dãy số (ID) của ảnh bạn muốn dán vào đây."
-helpLabel.TextColor3, helpLabel.Font, helpLabel.TextSize, helpLabel.TextWrapped = THEME.TEXT_DIM, Enum.Font.Gotham, 11, true
+do -- SETTINGS & DUNGEON
+    local dungeonSection = addCollapsible(TabBlox, "Dungeon") -- Back to Blox Fruit tab
+    ui_controls.autoDungeon = addToggle(dungeonSection, "Auto Dungeon", false, function(v) flags.autoDungeon = v end)
 
-local dungeonSection = addCollapsible(TabBlox, "Dungeon")
-ui_controls.autoDungeon = addToggle(dungeonSection, "Auto Dungeon", false, function(v) autoDungeonEnabled = v end)
+    local customIconList = addCollapsible(TabSettings, "Custom Button Icon")
+    local helpLabel = Instance.new("TextLabel", customIconList)
+    helpLabel.Size, helpLabel.BackgroundTransparency = UDim2.new(1,0,0,80), 1
+    helpLabel.Text = "📖 Hướng dẫn lấy ID:\n1. Mở Roblox Website > Create > Dashboard\n2. Chọn Development Items > Decals\n3. Copy dãy số (ID) của ảnh bạn muốn dán vào đây."
+    helpLabel.TextColor3, helpLabel.Font, helpLabel.TextSize, helpLabel.TextWrapped = THEME.TEXT_DIM, Enum.Font.Gotham, 11, true
 
-addInput(customIconList, "Icon Button ID", "84053545044369", "Dán ID số vào đây...", function(v)
-    local idOnly = v:match("%d+")
-    if idOnly then
-        ToggleBtn.Image = "rbxthumb://type=Asset&id=" .. idOnly .. "&w=420&h=420"
-    end
-end)
+    addInput(customIconList, "Icon Button ID", "84053545044369", "Dán ID số vào đây...", function(v)
+        local idOnly = v:match("%d+")
+        if idOnly then
+            ToggleBtn.Image = "rbxthumb://type=Asset&id=" .. idOnly .. "&w=420&h=420"
+        end
+    end)
+end
 
 local last10s, last2s = 0, 0
 task.spawn(function()
     while true do
         task.wait(1)
         local now = tick()
-        if autoRaceV3Enabled then pcall(function() ReplicatedStorage.Remotes.CommE:FireServer("ActivateAbility") end) end
-        if autoStoreFruitEnabled then storeAllFruits() end
-        if autoUpgradeRaceEnabled then pcall(function() ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("UpgradeRace", "Buy") end) end
-        if autoActiveV4Enabled then
+        if flags.autoRaceV3 then 
+            pcall(function() 
+                local rem = GetCommE()
+                if rem then rem:FireServer("ActivateAbility") end
+            end) 
+        end
+        if flags.autoStoreFruit then storeAllFruits() end
+        if flags.autoUpgradeRace then 
+            pcall(function() 
+                local rem = GetCommF()
+                if rem then rem:InvokeServer("UpgradeRace", "Buy") end
+            end) 
+        end
+        if flags.autoActiveV4 then
             pcall(function()
                 local character = player.Character
                 if character then
@@ -1553,18 +1623,31 @@ task.spawn(function()
                 end
             end)
         end
-        if autoTradeBonesEnabled and now - last2s >= 2 then
+        if flags.autoTradeBones and now - last2s >= 2 then
             last2s = now
-            pcall(function() ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("Bones", "Buy", 1, 1) end)
+            pcall(function() 
+                local rem = GetCommF()
+                if rem then rem:InvokeServer("Bones", "Buy", 1, 1) end
+            end)
         end
-        if autoRandomFruitEnabled and now - last10s >= 10 then
+        if flags.autoRandomFruit and now - last10s >= 10 then
             last10s = now
-            pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("Cousin", "Buy", "DLCBoxData") end)
-        end
-        if autoSpawnCakePrince then
-            pcall(function() ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("CakePrinceSpawner", true) end)
+            pcall(function() 
+                local rem = GetCommF()
+                if rem then rem:InvokeServer("Cousin", "Buy", "DLCBoxData") end
+            end)
         end
         if now % 1200 < 1 then hoppedServers = {} end
+    end
+end)
+
+player.Idled:Connect(function()
+    if flags.antiAfk then
+        pcall(function()
+            VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+            task.wait(1)
+            VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+        end)
     end
 end)
 
