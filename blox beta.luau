@@ -25,6 +25,8 @@ local autoChestMirage, autoChestStyle, autoChestType, autoActiveV4Enabled, autoT
 local autoBossEnabled, autoBossHopEnabled, customBossEnabled, selectedBosses = false, false, false, {}
 local autoUpgradeRaceEnabled = false
 local autoFarmBonesEnabled, autoBoneTargetObj = false, nil
+local autoCakePrinceEnabled, autoSpawnCakePrince, autoCakeTargetObj = false, false, nil
+local cakeMobs = {"Cake Prince", "Cookie Crafter", "Cake Guard", "Baking Staff", "Head Baker"}
 local boneMobs = {"Reborn Skeleton", "Demonic Soul", "Posessed Mummy", "Living Zombie"}
 local autoBossTargetObj, lastBossDeadTime, masterBossList = nil, 0, {}
 local autoEquipType = "Melee" 
@@ -775,6 +777,100 @@ ui_controls.autoChestType = addDropdown(secretIslandList, "Chest Type", {"All", 
 
 local trialSection = addCollapsible(TabBlox, "Trial")
 ui_controls.autoUpgradeRace = addToggle(trialSection, "Auto Upgrade Race", false, function(v) autoUpgradeRaceEnabled = v end)
+addButton(trialSection, "TP On Top Great Tree", THEME.ACCENT, function()
+    pcall(function()
+        task.spawn(function()
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                local hrp = char.HumanoidRootPart
+                local map = workspace:FindFirstChild("Map")
+                local isNear = map and (map:FindFirstChild("Great Tree") or map:FindFirstChild("Ice Cream Island"))
+                
+                if not isNear then
+                    -- Bước 1: Dịch chuyển vào tâm Cổng Castle
+                    hrp.CFrame = CFrame.new(-5027, 317, -3207)
+                    -- Bước 2: Chờ qua Hydra
+                    task.wait(2.5)
+                end
+                
+                -- Bước 3: Tween lên đỉnh Great Tree với Noclip
+                local treePos = Vector3.new(3035, 2281, -7328)
+                repeat
+                    local dt = task.wait()
+                    -- Kích hoạt Noclip xuyên núi
+                    for _, v in ipairs(characterParts) do v.CanCollide = false end
+                    
+                    local dist = (hrp.Position - treePos).Magnitude
+                    local speed = islandTweenSpeed or 360
+                    local moveDist = math.min(speed * dt, dist)
+                    local direction = (treePos - hrp.Position).Unit
+                    if direction.X == direction.X then 
+                        hrp.CFrame = hrp.CFrame + (direction * moveDist)
+                        hrp.Velocity = Vector3.new(0,0,0)
+                    end
+                until (hrp.Position - treePos).Magnitude < 7
+                hrp.CFrame = CFrame.new(treePos)
+            end
+        end)
+    end)
+end)
+
+addButton(trialSection, "TP to Ancient One", THEME.ACCENT, function()
+    pcall(function()
+        task.spawn(function()
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                local hrp = char.HumanoidRootPart
+                local targetPos = Vector3.new(28974.22265625, 14878.984375, -119.06900024414062)
+                
+                -- Bắt đầu lướt gió xuyên vật thể ngay lập tức
+                repeat
+                    local dt = task.wait()
+                    -- Noclip Mode ON
+                    for _, v in ipairs(characterParts) do v.CanCollide = false end
+                    
+                    local dist = (hrp.Position - targetPos).Magnitude
+                    local speed = islandTweenSpeed or 360
+                    local moveDist = math.min(speed * dt, dist)
+                    local direction = (targetPos - hrp.Position).Unit
+                    
+                    if direction.X == direction.X then 
+                        hrp.CFrame = hrp.CFrame + (direction * moveDist)
+                        hrp.Velocity = Vector3.new(0,0,0)
+                    end
+                until (hrp.Position - targetPos).Magnitude < 8
+                hrp.CFrame = CFrame.new(targetPos)
+            end
+        end)
+    end)
+end)
+
+addButton(trialSection, "TP to Clocks", THEME.ACCENT, function()
+    pcall(function()
+        task.spawn(function()
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                local hrp = char.HumanoidRootPart
+                local targetPos = Vector3.new(29560.439453125, 15090.95703125, -86.406005859375)
+                
+                -- Bắt đầu lướt gió xuyên vật thể ngay lập tức
+                repeat
+                    local dt = task.wait()
+                    -- Noclip Mode ON
+                    for _, v in ipairs(characterParts) do v.CanCollide = false end
+                    
+                    local dist = (hrp.Position - targetPos).Magnitude
+                    local speed = islandTweenSpeed or 360
+                    local moveDist = math.min(speed * dt, dist)
+                    local direction = (targetPos - hrp.Position).Unit
+                    
+                    if direction.X == direction.X then 
+                        hrp.CFrame = hrp.CFrame + (direction * moveDist)
+                        hrp.Velocity = Vector3.new(0,0,0)
+                    end
+                until (hrp.Position - targetPos).Magnitude < 8
+                hrp.CFrame = CFrame.new(targetPos)
+            end
+        end)
+    end)
+end)
 
 -- SPECIAL FARM TAB
 local bossFarmList = addCollapsible(TabSpecialFarm, "Auto Boss Config")
@@ -784,6 +880,10 @@ ui_controls.customBoss = addToggle(bossFarmList, "Custom Boss (Selection)", fals
     customBossEnabled = v 
     if ui_controls.bossSelectFrame then ui_controls.bossSelectFrame.Visible = v end
 end)
+
+local autoCakeSection = addCollapsible(TabSpecialFarm, "Auto Cake Princess")
+ui_controls.autoCakeFarm = addToggle(autoCakeSection, "Auto Farm Cake Mobs", false, function(v) autoCakePrinceEnabled = v if not v then autoCakeTargetObj = nil end end)
+ui_controls.autoCakeSpawn = addToggle(autoCakeSection, "Auto Spawn Cake Princess", false, function(v) autoSpawnCakePrince = v end)
 
 local bossSelectContainer = addCollapsible(bossFarmList, "Select Bosses")
 ui_controls.bossSelectFrame = bossSelectContainer.Parent
@@ -993,6 +1093,23 @@ RunService.Heartbeat:Connect(function(dt)
                 if direction.X == direction.X then hrp.CFrame = hrp.CFrame + (direction * moveDist) end
             end
         end
+    elseif autoCakePrinceEnabled and autoCakeTargetObj then
+        local tH = autoCakeTargetObj:IsA("Model") and autoCakeTargetObj:FindFirstChildOfClass("Humanoid")
+        if tH and tH.Health <= 0 then autoCakeTargetObj = nil return end
+        
+        local targetPart = autoCakeTargetObj:IsA("Model") and (autoCakeTargetObj.PrimaryPart or autoCakeTargetObj:FindFirstChild("HumanoidRootPart") or autoCakeTargetObj:FindFirstChildWhichIsA("BasePart")) or autoCakeTargetObj
+        if targetPart then
+            for _, v in ipairs(characterParts) do v.CanCollide = false end
+            hrp.Velocity = Vector3.new(0, 0, 0)
+            local targetPos = targetPart.Position + Vector3.new(0, safeHeight, 0)
+            local dist = (hrp.Position - targetPos).Magnitude
+            if dist > 0.5 then
+                local speed = (dist < 140) and 1300 or 360
+                local moveDist = math.min(speed * dt, dist)
+                local direction = (targetPos - hrp.Position).Unit
+                if direction.X == direction.X then hrp.CFrame = hrp.CFrame + (direction * moveDist) end
+            end
+        end
     end
 
 end)
@@ -1165,6 +1282,52 @@ task.spawn(function()
                     autoBoneTargetObj = spawnTarget
                 end
             end)
+        end
+
+        -- Logic Auto Farm Cake Princess Selector
+        if autoCakePrinceEnabled and char and char:FindFirstChild("HumanoidRootPart") then
+            pcall(function()
+                local myHRP = char.HumanoidRootPart
+                local foundTarget = nil
+                local minTargetDist = math.huge
+                local enemies = workspace:FindFirstChild("Enemies")
+                local function isTarget(n)
+                    for _, m in ipairs(cakeMobs) do if n:find(m) then return true end end
+                    return false
+                end
+                if enemies then
+                    for _, e in ipairs(enemies:GetChildren()) do
+                        if isTarget(e.Name) then
+                            local hum = e:FindFirstChildOfClass("Humanoid")
+                            if hum and hum.Health > 0 and e:FindFirstChild("HumanoidRootPart") then
+                                local d = (myHRP.Position - e.HumanoidRootPart.Position).Magnitude
+                                local isBoss = e.Name == "Cake Prince"
+                                if (isBoss and 0 or d) < minTargetDist then 
+                                    minTargetDist = (isBoss and 0 or d)
+                                    foundTarget = e 
+                                end
+                                if isBoss then break end
+                            end
+                        end
+                    end
+                end
+                if foundTarget then autoCakeTargetObj = foundTarget
+                else
+                    local spawnTarget = nil
+                    local minSpawnDist = math.huge
+                    local spawns = workspace:FindFirstChild("_WorldOrigin") and workspace._WorldOrigin:FindFirstChild("EnemySpawns")
+                    if spawns then
+                        for _, s in ipairs(spawns:GetChildren()) do
+                            if isTarget(s.Name) then
+                                local d = (myHRP.Position - s.Position).Magnitude
+                                if d < minSpawnDist then minSpawnDist = d; spawnTarget = s end
+                            end
+                        end
+                    end
+                    autoCakeTargetObj = spawnTarget
+                end
+            end)
+        end
         else autoBoneTargetObj = nil end
 
         -- Sync Auto Equip (0.1s)
@@ -1397,6 +1560,9 @@ task.spawn(function()
         if autoRandomFruitEnabled and now - last10s >= 10 then
             last10s = now
             pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("Cousin", "Buy", "DLCBoxData") end)
+        end
+        if autoSpawnCakePrince then
+            pcall(function() ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("CakePrinceSpawner", true) end)
         end
         if now % 1200 < 1 then hoppedServers = {} end
     end
