@@ -502,7 +502,7 @@ local function findTargetServer()
                 if success and data then
                     for jobId, info in data do
                         local count, maxP = info.Count or 0, info.MaxPlayers or 12
-                        if jobId ~= game.JobId and not table.find(hoppedServers, jobId) and count > 0 and count < maxP - 1 then
+                        if jobId ~= game.JobId and not table.find(hoppedServers, jobId) and count < maxP - 1 then
                             table.insert(allInternalServers, {id = jobId, playing = count})
                         end
                     end
@@ -514,7 +514,7 @@ local function findTargetServer()
         repeat task.wait() until threads >= maxPages or tick() - start > 4
         if #allInternalServers > 0 then
             table.sort(allInternalServers, function(a, b) return a.playing < b.playing end)
-            return allInternalServers[math.random(1, math.min(#allInternalServers, 15))]
+            return allInternalServers[math.random(1, math.min(#allInternalServers, 5))]
         end
     end
 
@@ -526,7 +526,7 @@ local function findTargetServer()
             local decoded = HttpService:JSONDecode(result)
             if not decoded or not decoded.data then break end
             for _, s in decoded.data do
-                if s.id ~= game.JobId and not table.find(hoppedServers, s.id) and (s.playing or 0) > 0 and (s.playing or 0) < (s.maxPlayers or 12) - 1 then
+                if s.id ~= game.JobId and not table.find(hoppedServers, s.id) and (s.playing or 0) < (s.maxPlayers or 12) - 1 then
                     table.insert(allServers, s)
                 end
             end
@@ -589,11 +589,16 @@ local function executeHop()
         local target = findTargetServer()
         if target then
             table.insert(hoppedServers, target.id)
-            hopStatusLabel.Text = "✅ Nhảy vào server " .. target.playing .. " người..."
             hopStatusLabel.TextColor3 = THEME.GREEN
-            task.wait(0.5) TeleportService:TeleportToPlaceInstance(game.PlaceId, target.id, player)
+            local attempts = 0
+            repeat
+                attempts += 1
+                hopStatusLabel.Text = "✅ Đang nhảy (Lần "..attempts..")..."
+                local success = pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, target.id, player) end)
+                if not success then task.wait(3) end
+            until attempts >= 3
         else
-            hopStatusLabel.Text = "❌ Không tìm thấy server mới nào!"
+            hopStatusLabel.Text = "❌ Không tìm thấy server mới!"
             hopStatusLabel.TextColor3 = THEME.RED
         end
     end)
@@ -770,18 +775,6 @@ ui_controls.autoChestType = addDropdown(secretIslandList, "Chest Type", {"All", 
 
 local trialSection = addCollapsible(TabBlox, "Trial")
 ui_controls.autoUpgradeRace = addToggle(trialSection, "Auto Upgrade Race", false, function(v) autoUpgradeRaceEnabled = v end)
-addButton(trialSection, "Teleport to Temple", THEME.ACCENT, function()
-    pcall(function()
-        task.spawn(function()
-            -- Mode 1: Remote Invoke
-            ReplicatedStorage.Remotes.CommF_:InvokeServer("RaceV4Progress", "Teleport")
-            -- Mode 2: Force CFrame (Dự phòng nếu Remote báo nil)
-            if char and char:FindFirstChild("HumanoidRootPart") then
-                char.HumanoidRootPart.CFrame = CFrame.new(28286, 14897, 103)
-            end
-        end)
-    end)
-end)
 
 -- SPECIAL FARM TAB
 local bossFarmList = addCollapsible(TabSpecialFarm, "Auto Boss Config")
@@ -816,7 +809,7 @@ end
 refreshBossList()
 addButton(bossFarmList, "Refresh Boss List", THEME.ACCENT, function() refreshBossList() end)
 
-local cache = { mirage = nil, chest = nil, lastScan = 0, boatTarget = nil, boatParts = {}, touchedChests = {}, lastLootTime = 0, dState = "", dTick = 0, lastDeath = 0 }
+local cache = { mirage = nil, kitsune = nil, prehistoric = nil, chest = nil, lastScan = 0, boatTarget = nil, boatParts = {}, touchedChests = {}, lastLootTime = 0, dState = "", dTick = 0, lastDeath = 0 }
 local function updateCharParts()
     characterParts = {}
     if char then
@@ -859,7 +852,7 @@ RunService.Heartbeat:Connect(function(dt)
 
     for name, enabled in islandTweenEnabled do
         if enabled then
-            local obj = (name == "Mirage Island" and cache.mirage) or findIsland(name)
+            local obj = (name == "Mirage Island" and cache.mirage) or (name == "Kitsune Island" and cache.kitsune) or (name == "Prehistoric Island" and cache.prehistoric)
             if obj then
                 local posPart = obj:FindFirstChild("MainPart", true) or obj:FindFirstChildWhichIsA("BasePart", true) or obj.PrimaryPart
                 if posPart then
@@ -1044,7 +1037,7 @@ task.spawn(function()
                 
                 if bestTarget then
                     local targetPos = bestTarget.Position + Vector3.new(0, dungeonCache.baseHeight, 0)
-                    for _, v in ipairs(characterParts) do if v.CanCollide then v.CanCollide = false end end
+                    for _, v in ipairs(characterParts) do v.CanCollide = false end
                     myHRP.Velocity = Vector3.zero
                     local dist = (myHRP.Position - targetPos).Magnitude
                     if dist > 0.1 then
@@ -1200,6 +1193,9 @@ task.spawn(function()
                 end
             end
         end
+
+        -- Smooth Player ESP (0.1s)
+        if espSettings.Enabled then updateESP() end
     end
 end)
 
@@ -1207,18 +1203,16 @@ task.spawn(function()
     while true do
         task.wait(0.5)
         local root = char and char:FindFirstChild("HumanoidRootPart")
-        if root then
-            safeHeight = (root:FindFirstChild("Buddha") or root:FindFirstChild("Buddha2")) and 35 or 15
-        end
-        if autoBusoEnabled and char and not char:FindFirstChild("HasBuso") then
-            pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("Buso") end)
-        end
+        if root then safeHeight = (root:FindFirstChild("Buddha") or root:FindFirstChild("Buddha2")) and 35 or 15 end
+        if autoBusoEnabled and char and not char:FindFirstChild("HasBuso") then pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("Buso") end) end
         for t, e in pairs(hitboxEnabled) do if e then expandHitbox(t) end end
+        updateBoatSpeeds()
         updateIslandESP()
-        if espSettings.Enabled then updateESP() end
-        if autoChestMirage then
+        if autoChestMirage or islandEspSettings.Enabled then
             cache.mirage = findIsland("Mirage Island")
-            if cache.mirage then
+            cache.kitsune = findIsland("Kitsune Island")
+            cache.prehistoric = findIsland("Prehistoric Island")
+            if autoChestMirage and cache.mirage then
                 local chestFolder = workspace:FindFirstChild("ChestModels")
                 if chestFolder then
                     for _, chest in ipairs(chestFolder:GetChildren()) do
@@ -1234,7 +1228,6 @@ task.spawn(function()
                 end
             end
         end
-        if espSettings.Enabled then updateESP() end
     end
 end)
 
@@ -1358,8 +1351,8 @@ hopStatusLabel.Size, hopStatusLabel.BackgroundTransparency = UDim2.new(1, 0, 1, 
 hopStatusLabel.Text, hopStatusLabel.TextColor3, hopStatusLabel.Font, hopStatusLabel.TextSize = "Bấm để săn server vắng nhất", THEME.TEXT_DIM, Enum.Font.Gotham, 12
 
 addButton(TabUtils, "Small Server Hop", THEME.ACCENT, function() executeHop() end)
-addButton(TabUtils, "Old Server (4H+)", THEME.DARK_ITEM, function() hopToOldServer("4h") end)
-addButton(TabUtils, "Old Server (3H45+)", THEME.DARK_ITEM, function() hopToOldServer("3h45") end)
+addButton(TabUtils, "Old-like (Low Population)", THEME.DARK_ITEM, function() hopToOldServer("4h") end)
+addButton(TabUtils, "Old-like (Fast Scan)", THEME.DARK_ITEM, function() hopToOldServer("3h45") end)
 
 local customIconList = addCollapsible(TabSettings, "Custom Button Icon")
 local helpLabel = Instance.new("TextLabel", customIconList)
@@ -1377,12 +1370,14 @@ addInput(customIconList, "Icon Button ID", "84053545044369", "Dán ID số vào 
     end
 end)
 
-task.spawn(function() while task.wait(0.5) do updateBoatSpeeds() end end)
-task.spawn(function() while task.wait(1) do if autoRaceV3Enabled then pcall(function() ReplicatedStorage.Remotes.CommE:FireServer("ActivateAbility") end) end end end)
-task.spawn(function() while task.wait(10) do if autoRandomFruitEnabled then pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("Cousin", "Buy", "DLCBoxData") end) end end end)
+local last10s, last2s = 0, 0
 task.spawn(function()
     while true do
-        task.wait(0.5)
+        task.wait(1)
+        local now = tick()
+        if autoRaceV3Enabled then pcall(function() ReplicatedStorage.Remotes.CommE:FireServer("ActivateAbility") end) end
+        if autoStoreFruitEnabled then storeAllFruits() end
+        if autoUpgradeRaceEnabled then pcall(function() ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("UpgradeRace", "Buy") end) end
         if autoActiveV4Enabled then
             pcall(function()
                 local character = player.Character
@@ -1390,23 +1385,20 @@ task.spawn(function()
                     local awakening = player.Backpack:FindFirstChild("Awakening") or character:FindFirstChild("Awakening")
                     if awakening then
                         local rf = awakening:FindFirstChild("RemoteFunction", true)
-                        if rf then
-                            task.spawn(function() pcall(function() rf:InvokeServer(true) end) end)
-                        end
+                        if rf then pcall(function() rf:InvokeServer(true) end) end
                     end
                 end
             end)
         end
-    end
-end)
-task.spawn(function() while task.wait(2) do if autoTradeBonesEnabled then pcall(function() ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("Bones", "Buy", 1, 1) end) end end end)
-task.spawn(function() while task.wait(1) do if autoStoreFruitEnabled then storeAllFruits() end end end)
-task.spawn(function()
-    while true do
-        task.wait(1)
-        if autoUpgradeRaceEnabled then
-            pcall(function() ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("UpgradeRace", "Buy") end)
+        if autoTradeBonesEnabled and now - last2s >= 2 then
+            last2s = now
+            pcall(function() ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("Bones", "Buy", 1, 1) end)
         end
+        if autoRandomFruitEnabled and now - last10s >= 10 then
+            last10s = now
+            pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("Cousin", "Buy", "DLCBoxData") end)
+        end
+        if now % 1200 < 1 then hoppedServers = {} end
     end
 end)
 
@@ -1418,3 +1410,4 @@ if #tabBtns > 0 then
     tabBtns[1].BackgroundTransparency = 0
     tabBtns[1].TextColor3 = THEME.ACCENT
 end
+
