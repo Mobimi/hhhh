@@ -90,7 +90,7 @@ function Lib:CreateWindow(title, author, iconId)
     MainFrame.Size = UDim2.new(0, 540, 0, 340)
     MainFrame.Position = UDim2.new(0.5, -270, 0.5, -170)
     MainFrame.BackgroundColor3 = Lib.THEME.BG_MAIN
-    MainFrame.BackgroundTransparency = 0.1 -- Increased opacity
+    MainFrame.BackgroundTransparency = 0.1
     MainFrame.BorderSizePixel = 0
     MainFrame.ClipsDescendants = true
     MainFrame.Visible = true
@@ -149,7 +149,7 @@ function Lib:CreateWindow(title, author, iconId)
     ContentArea.Size = UDim2.new(1, -125, 1, -15)
     ContentArea.Position = UDim2.new(0, 120, 0, 10)
     ContentArea.BackgroundTransparency = 1
-    ContentArea.ClipsDescendants = false -- Ensure items aren't clipped by the container
+    ContentArea.ClipsDescendants = false
     ContentArea.Parent = MainFrame
     
     local pages = {}
@@ -158,14 +158,16 @@ function Lib:CreateWindow(title, author, iconId)
     local Window = {}
     
     local function addCommonMethods(Target, ParentScroll)
+        local itemIndex = 0
+        local function getIdx() itemIndex += 1 return itemIndex end
+
         function Target:AddSection(title)
             local f = Instance.new("Frame")
             f.Name = "Section_" .. title
             f.Size = UDim2.new(1, 0, 0, 26)
             f.BackgroundTransparency = 1
+            f.LayoutOrder = getIdx()
             f.Parent = ParentScroll
-            Target.LayoutCount = (Target.LayoutCount or 0) + 1
-            f.LayoutOrder = Target.LayoutCount
             
             local label = Instance.new("TextLabel")
             label.Size = UDim2.new(1, 0, 1, -4)
@@ -198,9 +200,8 @@ function Lib:CreateWindow(title, author, iconId)
             l.TextSize = 12
             l.TextXAlignment = Enum.TextXAlignment.Left
             l.TextWrapped = true
+            l.LayoutOrder = getIdx()
             l.Parent = ParentScroll
-            Target.LayoutCount = (Target.LayoutCount or 0) + 1
-            l.LayoutOrder = Target.LayoutCount
             return l
         end
 
@@ -209,9 +210,8 @@ function Lib:CreateWindow(title, author, iconId)
             f.Size = UDim2.new(1, 0, 0, 30)
             f.BackgroundColor3 = Lib.THEME.BG_CONTENT
             f.BackgroundTransparency = 0.4
+            f.LayoutOrder = getIdx()
             f.Parent = ParentScroll
-            Target.LayoutCount = (Target.LayoutCount or 0) + 1
-            f.LayoutOrder = Target.LayoutCount
             corner(f, 6)
             stroke(f, Lib.THEME.ACCENT)
             
@@ -267,9 +267,8 @@ function Lib:CreateWindow(title, author, iconId)
             f.Size = UDim2.new(1, 0, 0, 42)
             f.BackgroundColor3 = Lib.THEME.BG_CONTENT
             f.BackgroundTransparency = 0.4
+            f.LayoutOrder = getIdx()
             f.Parent = ParentScroll
-            Target.LayoutCount = (Target.LayoutCount or 0) + 1
-            f.LayoutOrder = Target.LayoutCount
             corner(f, 6)
             stroke(f, Lib.THEME.ACCENT)
             
@@ -353,9 +352,8 @@ function Lib:CreateWindow(title, author, iconId)
             f.Size = UDim2.new(1, 0, 0, 55)
             f.BackgroundColor3 = Lib.THEME.BG_CONTENT
             f.BackgroundTransparency = 0.4
+            f.LayoutOrder = getIdx()
             f.Parent = ParentScroll
-            Target.LayoutCount = (Target.LayoutCount or 0) + 1
-            f.LayoutOrder = Target.LayoutCount
             corner(f, 6)
             stroke(f, Lib.THEME.ACCENT)
 
@@ -396,9 +394,8 @@ function Lib:CreateWindow(title, author, iconId)
             b.TextColor3 = Lib.THEME.TEXT
             b.Font = Enum.Font.GothamBold
             b.TextSize = 11
+            b.LayoutOrder = getIdx()
             b.Parent = ParentScroll
-            Target.LayoutCount = (Target.LayoutCount or 0) + 1
-            b.LayoutOrder = Target.LayoutCount
             corner(b, 6)
             stroke(b, Lib.THEME.ACCENT)
 
@@ -417,9 +414,8 @@ function Lib:CreateWindow(title, author, iconId)
             f.BackgroundColor3 = Lib.THEME.BG_CONTENT
             f.BackgroundTransparency = 0.4
             f.ClipsDescendants = true
+            f.LayoutOrder = getIdx()
             f.Parent = ParentScroll
-            Target.LayoutCount = (Target.LayoutCount or 0) + 1
-            f.LayoutOrder = Target.LayoutCount
             corner(f, 6)
             stroke(f, Lib.THEME.ACCENT)
             
@@ -439,9 +435,10 @@ function Lib:CreateWindow(title, author, iconId)
             list.BackgroundTransparency = 1
             list.Parent = f
             local layout = Instance.new("UIListLayout")
+            layout.SortOrder = Enum.SortOrder.LayoutOrder
             layout.Parent = list
             
-            for _, v in ipairs(items) do
+            for ide, v in ipairs(items) do
                 local ib = Instance.new("TextButton")
                 ib.Size = UDim2.new(1, 0, 0, 26)
                 ib.BackgroundColor3 = Lib.THEME.DARK_ITEM
@@ -451,6 +448,7 @@ function Lib:CreateWindow(title, author, iconId)
                 ib.TextColor3 = Lib.THEME.TEXT_DIM
                 ib.Font = Enum.Font.Gotham
                 ib.TextSize = 10
+                ib.LayoutOrder = ide
                 ib.TextXAlignment = Enum.TextXAlignment.Left
                 ib.Parent = list
                 ib.MouseButton1Click:Connect(function() 
@@ -478,9 +476,8 @@ function Lib:CreateWindow(title, author, iconId)
             c.BackgroundTransparency = 0.4
             c.ClipsDescendants = true
             c.BorderSizePixel = 0
+            c.LayoutOrder = getIdx()
             c.Parent = ParentScroll
-            Target.LayoutCount = (Target.LayoutCount or 0) + 1
-            c.LayoutOrder = Target.LayoutCount
             corner(c, 6)
             stroke(c, Lib.THEME.ACCENT)
             
@@ -499,6 +496,7 @@ function Lib:CreateWindow(title, author, iconId)
             con.Size = UDim2.new(1, 0, 0, 0)
             con.BackgroundTransparency = 1
             con.Parent = c
+            local ly = Instance.new("UIListLayout")
             ly.Padding = UDim.new(0, 4)
             ly.SortOrder = Enum.SortOrder.LayoutOrder
             ly.Parent = con
@@ -544,7 +542,7 @@ function Lib:CreateWindow(title, author, iconId)
         p.ScrollBarThickness = 2
         p.ScrollBarImageColor3 = Lib.THEME.ACCENT
         p.AutomaticCanvasSize = Enum.AutomaticSize.Y
-        p.CanvasSize = UDim2.new(0, 0, 0, 0) -- Important for AutomaticCanvasSize
+        p.CanvasSize = UDim2.new(0, 0, 0, 0)
         p.Parent = ContentArea
         
         local l = Instance.new("UIListLayout")
@@ -552,27 +550,29 @@ function Lib:CreateWindow(title, author, iconId)
         l.SortOrder = Enum.SortOrder.LayoutOrder
         l.Parent = p
         
-        table.insert(pages, p)
-        table.insert(tabBtns, b)
-        local tabIndex = #pages
-
         b.MouseButton1Click:Connect(function() 
-            Window:SelectTab(tabIndex)
+            for _, x in ipairs(pages) do x.Visible = false end 
+            for _, x in ipairs(tabBtns) do tween(x, {BackgroundTransparency = 1, TextColor3 = Lib.THEME.TEXT_DIM}, 0.2) end 
+            p.Visible = true
+            b.BackgroundTransparency = 0
+            b.TextColor3 = Lib.THEME.ACCENT 
         end)
         
-        local Tab = {ScrollFrame = p, Instance = p, LayoutCount = 0}
+        table.insert(pages, p)
+        table.insert(tabBtns, b)
+        
+        local Tab = {ScrollFrame = p, Instance = p}
         addCommonMethods(Tab, p)
         return Tab
     end
     
     function Window:SelectTab(num)
-        for i, page in ipairs(pages) do
-            page.Visible = (i == num)
-            local btn = tabBtns[i]
-            if btn then
-                btn.BackgroundTransparency = (i == num) and 0 or 1
-                btn.TextColor3 = (i == num) and Lib.THEME.ACCENT or Lib.THEME.TEXT_DIM
-            end
+        if #tabBtns >= num then
+            for _, x in ipairs(pages) do x.Visible = false end
+            for _, x in ipairs(tabBtns) do x.BackgroundTransparency = 1; x.TextColor3 = Lib.THEME.TEXT_DIM end
+            pages[num].Visible = true
+            tabBtns[num].BackgroundTransparency = 0
+            tabBtns[num].TextColor3 = Lib.THEME.ACCENT
         end
     end
     
