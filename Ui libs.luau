@@ -4,7 +4,36 @@ local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 
-local Lib = {}
+local Lib = { connections = {} }
+
+local function track(conn)
+    table.insert(Lib.connections, conn)
+    return conn
+end
+
+local globalInput = {
+    activeDrag = nil,
+    activeSlider = nil
+}
+
+track(UserInputService.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        if globalInput.activeDrag then
+            local obj, startPos, dragStart = globalInput.activeDrag.obj, globalInput.activeDrag.startPos, globalInput.activeDrag.dragStart
+            local delta = input.Position - dragStart
+            obj.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        elseif globalInput.activeSlider then
+            globalInput.activeSlider.update(input)
+        end
+    end
+end))
+
+track(UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        globalInput.activeDrag = nil
+        globalInput.activeSlider = nil
+    end
+end))
 
 Lib.THEME = {
     BG_MAIN = Color3.fromRGB(255, 255, 255),
@@ -41,26 +70,15 @@ local function tween(o, p, d)
 end
 
 local function makeDraggable(o)
-    local drag, dInput, dStart, sPos
-    o.InputBegan:Connect(function(i) 
+    track(o.InputBegan:Connect(function(i) 
         if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then 
-            drag, dStart, sPos = true, i.Position, o.Position 
-            i.Changed:Connect(function() 
-                if i.UserInputState == Enum.UserInputState.End then drag = false end 
-            end) 
+            globalInput.activeDrag = {
+                obj = o,
+                startPos = o.Position,
+                dragStart = i.Position
+            }
         end 
-    end)
-    o.InputChanged:Connect(function(i) 
-        if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then 
-            dInput = i 
-        end 
-    end)
-    UserInputService.InputChanged:Connect(function(i) 
-        if i == dInput and drag then 
-            local d = i.Position - dStart 
-            o.Position = UDim2.new(sPos.X.Scale, sPos.X.Offset + d.X, sPos.Y.Scale, sPos.Y.Offset + d.Y) 
-        end 
-    end)
+    end))
 end
 
 function Lib:CreateWindow(title, author, iconId)
@@ -99,11 +117,11 @@ function Lib:CreateWindow(title, author, iconId)
     stroke(MainFrame, Lib.THEME.ACCENT, 2)
     makeDraggable(MainFrame)
     
-    ToggleBtn.MouseButton1Click:Connect(function() 
+    track(ToggleBtn.MouseButton1Click:Connect(function() 
         guiVisible = not guiVisible 
         MainFrame.Visible = guiVisible 
         tween(ToggleBtn, {BackgroundTransparency = guiVisible and 0.3 or 0.2}, 0.2) 
-    end)
+    end))
     
     local Sidebar = Instance.new("Frame")
     Sidebar.Name = "Sidebar"
@@ -248,11 +266,11 @@ function Lib:CreateWindow(title, author, iconId)
                 tween(o, {Position = UDim2.new(state and 1 or 0, state and -14 or 2, 0.5, -6)}, 0.2) 
             end
 
-            btn.MouseButton1Click:Connect(function() 
+            track(btn.MouseButton1Click:Connect(function() 
                 state = not state 
                 update()
                 c(state) 
-            end)
+            end))
             
             local ToggleObj = {Instance = f}
             function ToggleObj:Set(v)
@@ -322,22 +340,12 @@ function Lib:CreateWindow(title, author, iconId)
                 c(v) 
             end
             
-            tr.InputBegan:Connect(function(i) 
+            track(tr.InputBegan:Connect(function(i) 
                 if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then 
-                    drag = true 
+                    globalInput.activeSlider = { update = up }
                     up(i.Position) 
                 end 
-            end)
-            UserInputService.InputEnded:Connect(function(i) 
-                if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then 
-                    drag = false 
-                end 
-            end)
-            UserInputService.InputChanged:Connect(function(i) 
-                if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then 
-                    up(i.Position) 
-                end 
-            end)
+            end))
             
             local SliderObj = {Instance = f}
             function SliderObj:Set(v)
@@ -380,7 +388,7 @@ function Lib:CreateWindow(title, author, iconId)
             i.ClearTextOnFocus = false
             i.Parent = f
             corner(i, 4)
-            i.FocusLost:Connect(function() c(i.Text) end)
+            track(i.FocusLost:Connect(function() c(i.Text) end))
             
             local InputObj = {Instance = f, TextBox = i}
             return InputObj
@@ -399,12 +407,12 @@ function Lib:CreateWindow(title, author, iconId)
             corner(b, 6)
             stroke(b, Lib.THEME.ACCENT)
 
-            b.MouseButton1Click:Connect(function() 
+            track(b.MouseButton1Click:Connect(function() 
                 tween(b, {BackgroundTransparency = 0.5}, 0.1) 
                 task.wait(0.1) 
                 tween(b, {BackgroundTransparency = 0}, 0.1) 
                 c() 
-            end)
+            end))
             return b
         end
         
@@ -451,18 +459,18 @@ function Lib:CreateWindow(title, author, iconId)
                 ib.LayoutOrder = ide
                 ib.TextXAlignment = Enum.TextXAlignment.Left
                 ib.Parent = list
-                ib.MouseButton1Click:Connect(function() 
+                track(ib.MouseButton1Click:Connect(function() 
                     l.Text = "  " .. t .. ": " .. tostring(v) 
                     tween(f, {Size = UDim2.new(1, 0, 0, 32)}, 0.2) 
                     c(v) 
-                end)
+                end))
             end
             
             local op = false
-            l.MouseButton1Click:Connect(function() 
+            track(l.MouseButton1Click:Connect(function() 
                 op = not op 
                 tween(f, {Size = UDim2.new(1, 0, 0, op and (32 + layout.AbsoluteContentSize.Y) or 32)}, 0.2) 
-            end)
+            end))
             
             local DropObj = {Instance = f}
             function DropObj:Set(v) l.Text = "  " .. t .. ": " .. tostring(v) end
@@ -508,14 +516,14 @@ function Lib:CreateWindow(title, author, iconId)
                 btn.Text, btn.TextColor3 = "  " .. ti .. (op and " ▲" or " ▼"), op and Lib.THEME.ACCENT or Lib.THEME.TEXT 
             end
 
-            btn.MouseButton1Click:Connect(function() 
+            track(btn.MouseButton1Click:Connect(function() 
                 op = not op 
                 updateH()
-            end)
+            end))
             
-            ly:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() 
+            track(ly:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() 
                 if op then updateH() end 
-            end)
+            end))
             
             local CollapsibleObj = {Instance = c, Container = con}
             addCommonMethods(CollapsibleObj, con)
@@ -550,13 +558,13 @@ function Lib:CreateWindow(title, author, iconId)
         l.SortOrder = Enum.SortOrder.LayoutOrder
         l.Parent = p
         
-        b.MouseButton1Click:Connect(function() 
+        track(b.MouseButton1Click:Connect(function() 
             for _, x in ipairs(pages) do x.Visible = false end 
             for _, x in ipairs(tabBtns) do tween(x, {BackgroundTransparency = 1, TextColor3 = Lib.THEME.TEXT_DIM}, 0.2) end 
             p.Visible = true
             b.BackgroundTransparency = 0
             b.TextColor3 = Lib.THEME.ACCENT 
-        end)
+        end))
         
         table.insert(pages, p)
         table.insert(tabBtns, b)
@@ -578,6 +586,16 @@ function Lib:CreateWindow(title, author, iconId)
     
     function Window:SetIconButton(id)
         ToggleBtn.Image = "rbxthumb://type=Asset&id=" .. id .. "&w=420&h=420"
+    end
+
+    function Window:Destroy()
+        pcall(function() ScreenGui:Destroy() end)
+        for _, conn in ipairs(Lib.connections) do
+            if typeof(conn) == "RBXScriptConnection" and conn.Connected then
+                conn:Disconnect()
+            end
+        end
+        Lib.connections = {}
     end
 
     return Window
