@@ -553,11 +553,7 @@ function Lib:CreateWindow(title, author, iconId)
         l.Parent = p
         
         b.MouseButton1Click:Connect(function() 
-            for _, x in ipairs(pages) do x.Visible = false end 
-            for _, x in ipairs(tabBtns) do tween(x, {BackgroundTransparency = 1, TextColor3 = Lib.THEME.TEXT_DIM}, 0.2) end 
-            p.Visible = true
-            b.BackgroundTransparency = 0
-            b.TextColor3 = Lib.THEME.ACCENT 
+            Window:SelectTab(table.find(tabBtns, b))
         end)
         
         table.insert(pages, p)
@@ -570,11 +566,14 @@ function Lib:CreateWindow(title, author, iconId)
     
     function Window:SelectTab(num)
         if #tabBtns >= num then
-            for _, x in ipairs(pages) do x.Visible = false end
-            for _, x in ipairs(tabBtns) do x.BackgroundTransparency = 1; x.TextColor3 = Lib.THEME.TEXT_DIM end
-            pages[num].Visible = true
-            tabBtns[num].BackgroundTransparency = 0
-            tabBtns[num].TextColor3 = Lib.THEME.ACCENT
+            for i, p in ipairs(pages) do
+                p.Visible = (i == num)
+                local btn = tabBtns[i]
+                if btn then
+                    btn.BackgroundTransparency = (i == num) and 0 or 1
+                    btn.TextColor3 = (i == num) and Lib.THEME.ACCENT or Lib.THEME.TEXT_DIM
+                end
+            end
         end
     end
     
