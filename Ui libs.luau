@@ -552,15 +552,13 @@ function Lib:CreateWindow(title, author, iconId)
         l.SortOrder = Enum.SortOrder.LayoutOrder
         l.Parent = p
         
-        b.MouseButton1Click:Connect(function() 
-            Window:SelectTab(#pages)
-            for i, btn in ipairs(tabBtns) do
-                if btn == b then Window:SelectTab(i) break end
-            end
-        end)
-        
         table.insert(pages, p)
         table.insert(tabBtns, b)
+        local tabIndex = #pages
+
+        b.MouseButton1Click:Connect(function() 
+            Window:SelectTab(tabIndex)
+        end)
         
         local Tab = {ScrollFrame = p, Instance = p, LayoutCount = 0}
         addCommonMethods(Tab, p)
@@ -568,14 +566,12 @@ function Lib:CreateWindow(title, author, iconId)
     end
     
     function Window:SelectTab(num)
-        local n = tonumber(num)
-        if not n or not pages[n] then return end
         for i, page in ipairs(pages) do
-            page.Visible = (i == n)
+            page.Visible = (i == num)
             local btn = tabBtns[i]
             if btn then
-                btn.BackgroundTransparency = (i == n) and 0 or 1
-                btn.TextColor3 = (i == n) and Lib.THEME.ACCENT or Lib.THEME.TEXT_DIM
+                btn.BackgroundTransparency = (i == num) and 0 or 1
+                btn.TextColor3 = (i == num) and Lib.THEME.ACCENT or Lib.THEME.TEXT_DIM
             end
         end
     end
