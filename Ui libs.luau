@@ -11,6 +11,40 @@ local function track(conn)
     return conn
 end
 
+Lib.THEME = {
+    BG_MAIN = Color3.fromRGB(255, 255, 255),
+    BG_SIDE = Color3.fromRGB(245, 245, 250),
+    BG_CONTENT = Color3.fromRGB(255, 255, 255),
+    ACCENT = Color3.fromRGB(255, 215, 0),
+    TEXT = Color3.fromRGB(0, 0, 0),
+    TEXT_DIM = Color3.fromRGB(80, 80, 80),
+    GREEN = Color3.fromRGB(34, 139, 34),
+    RED = Color3.fromRGB(178, 34, 34),
+    DARK_ITEM = Color3.fromRGB(235, 235, 240)
+}
+
+local function corner(p, r) 
+    local c = Instance.new("UICorner") 
+    c.CornerRadius = UDim.new(0, r or 8) 
+    c.Parent = p
+    return c 
+end
+
+local function stroke(p, c, t, b) 
+    local s = Instance.new("UIStroke") 
+    s.Color = c or (Lib.THEME.ACCENT) 
+    s.Thickness = t or 1 
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border 
+    s.Parent = p
+    return s 
+end
+
+local function tween(o, p, d) 
+    local t = TweenService:Create(o, TweenInfo.new(d or 0.3, Enum.EasingStyle.Quart), p)
+    t:Play() 
+    return t
+end
+
 local function makeDraggable(o)
     local drag, dInput, dStart, sPos
     track(o.InputBegan:Connect(function(i) 
@@ -280,7 +314,7 @@ function Lib:CreateWindow(title, author, iconId)
             tr.Text = ""
             tr.Parent = f
             
-            local prec, dragSlider = 10 ^ (dec or 0), false
+            local prec, drag = 10 ^ (dec or 0), false
             local function fV(v) 
                 return (dec or 0) <= 0 and tostring(math.round(v)) or tostring(math.floor(v * prec + 0.5) / prec) 
             end
@@ -295,17 +329,17 @@ function Lib:CreateWindow(title, author, iconId)
             
             track(tr.InputBegan:Connect(function(i) 
                 if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then 
-                    dragSlider = true 
+                    drag = true 
                     up(i.Position) 
                 end 
             end))
             track(UserInputService.InputEnded:Connect(function(i) 
                 if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then 
-                    dragSlider = false 
+                    drag = false 
                 end 
             end))
             track(UserInputService.InputChanged:Connect(function(i) 
-                if dragSlider and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then 
+                if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then 
                     up(i.Position) 
                 end 
             end))
@@ -547,14 +581,10 @@ function Lib:CreateWindow(title, author, iconId)
         end
     end
     
-    function Window:SetIconButton(id)
-        ToggleBtn.Image = "rbxthumb://type=Asset&id=" .. id .. "&w=420&h=420"
-    end
-
     function Window:Destroy()
-        pcall(function() ScreenGui:Destroy() end)
+        ScreenGui:Destroy()
         for _, conn in ipairs(Lib.connections) do
-            if typeof(conn) == "RBXScriptConnection" and conn.Connected then
+            if conn.Connected then
                 conn:Disconnect()
             end
         end
