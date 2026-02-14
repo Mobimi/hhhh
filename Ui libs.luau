@@ -164,6 +164,8 @@ function Lib:CreateWindow(title, author, iconId)
             f.Size = UDim2.new(1, 0, 0, 26)
             f.BackgroundTransparency = 1
             f.Parent = ParentScroll
+            Target.LayoutCount = (Target.LayoutCount or 0) + 1
+            f.LayoutOrder = Target.LayoutCount
             
             local label = Instance.new("TextLabel")
             label.Size = UDim2.new(1, 0, 1, -4)
@@ -197,6 +199,8 @@ function Lib:CreateWindow(title, author, iconId)
             l.TextXAlignment = Enum.TextXAlignment.Left
             l.TextWrapped = true
             l.Parent = ParentScroll
+            Target.LayoutCount = (Target.LayoutCount or 0) + 1
+            l.LayoutOrder = Target.LayoutCount
             return l
         end
 
@@ -206,6 +210,8 @@ function Lib:CreateWindow(title, author, iconId)
             f.BackgroundColor3 = Lib.THEME.BG_CONTENT
             f.BackgroundTransparency = 0.4
             f.Parent = ParentScroll
+            Target.LayoutCount = (Target.LayoutCount or 0) + 1
+            f.LayoutOrder = Target.LayoutCount
             corner(f, 6)
             stroke(f, Lib.THEME.ACCENT)
             
@@ -262,6 +268,8 @@ function Lib:CreateWindow(title, author, iconId)
             f.BackgroundColor3 = Lib.THEME.BG_CONTENT
             f.BackgroundTransparency = 0.4
             f.Parent = ParentScroll
+            Target.LayoutCount = (Target.LayoutCount or 0) + 1
+            f.LayoutOrder = Target.LayoutCount
             corner(f, 6)
             stroke(f, Lib.THEME.ACCENT)
             
@@ -346,6 +354,8 @@ function Lib:CreateWindow(title, author, iconId)
             f.BackgroundColor3 = Lib.THEME.BG_CONTENT
             f.BackgroundTransparency = 0.4
             f.Parent = ParentScroll
+            Target.LayoutCount = (Target.LayoutCount or 0) + 1
+            f.LayoutOrder = Target.LayoutCount
             corner(f, 6)
             stroke(f, Lib.THEME.ACCENT)
 
@@ -387,6 +397,8 @@ function Lib:CreateWindow(title, author, iconId)
             b.Font = Enum.Font.GothamBold
             b.TextSize = 11
             b.Parent = ParentScroll
+            Target.LayoutCount = (Target.LayoutCount or 0) + 1
+            b.LayoutOrder = Target.LayoutCount
             corner(b, 6)
             stroke(b, Lib.THEME.ACCENT)
 
@@ -406,6 +418,8 @@ function Lib:CreateWindow(title, author, iconId)
             f.BackgroundTransparency = 0.4
             f.ClipsDescendants = true
             f.Parent = ParentScroll
+            Target.LayoutCount = (Target.LayoutCount or 0) + 1
+            f.LayoutOrder = Target.LayoutCount
             corner(f, 6)
             stroke(f, Lib.THEME.ACCENT)
             
@@ -465,6 +479,8 @@ function Lib:CreateWindow(title, author, iconId)
             c.ClipsDescendants = true
             c.BorderSizePixel = 0
             c.Parent = ParentScroll
+            Target.LayoutCount = (Target.LayoutCount or 0) + 1
+            c.LayoutOrder = Target.LayoutCount
             corner(c, 6)
             stroke(c, Lib.THEME.ACCENT)
             
@@ -483,8 +499,8 @@ function Lib:CreateWindow(title, author, iconId)
             con.Size = UDim2.new(1, 0, 0, 0)
             con.BackgroundTransparency = 1
             con.Parent = c
-            local ly = Instance.new("UIListLayout")
             ly.Padding = UDim.new(0, 4)
+            ly.SortOrder = Enum.SortOrder.LayoutOrder
             ly.Parent = con
             
             local op = false
