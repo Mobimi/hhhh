@@ -11,68 +11,25 @@ local function track(conn)
     return conn
 end
 
-local globalInput = {
-    activeDrag = nil
-}
-
-track(UserInputService.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        if globalInput.activeDrag then
-            local obj, startPos, dragStart = globalInput.activeDrag.obj, globalInput.activeDrag.startPos, globalInput.activeDrag.dragStart
-            local delta = input.Position - dragStart
-            obj.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end
-end))
-
-track(UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        globalInput.activeDrag = nil
-    end
-end))
-
-Lib.THEME = {
-    BG_MAIN = Color3.fromRGB(255, 255, 255),
-    BG_SIDE = Color3.fromRGB(245, 245, 250),
-    BG_CONTENT = Color3.fromRGB(255, 255, 255),
-    ACCENT = Color3.fromRGB(255, 215, 0),
-    TEXT = Color3.fromRGB(0, 0, 0),
-    TEXT_DIM = Color3.fromRGB(80, 80, 80),
-    GREEN = Color3.fromRGB(34, 139, 34),
-    RED = Color3.fromRGB(178, 34, 34),
-    DARK_ITEM = Color3.fromRGB(235, 235, 240)
-}
-
-local function corner(p, r) 
-    local c = Instance.new("UICorner") 
-    c.CornerRadius = UDim.new(0, r or 8) 
-    c.Parent = p
-    return c 
-end
-
-local function stroke(p, c, t, b) 
-    local s = Instance.new("UIStroke") 
-    s.Color = c or (Lib.THEME.ACCENT) 
-    s.Thickness = t or 1 
-    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border 
-    s.Parent = p
-    return s 
-end
-
-local function tween(o, p, d) 
-    local t = TweenService:Create(o, TweenInfo.new(d or 0.3, Enum.EasingStyle.Quart), p)
-    t:Play() 
-    return t
-end
-
 local function makeDraggable(o)
+    local drag, dInput, dStart, sPos
     track(o.InputBegan:Connect(function(i) 
         if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then 
-            globalInput.activeDrag = {
-                obj = o,
-                startPos = o.Position,
-                dragStart = i.Position
-            }
+            drag, dStart, sPos = true, i.Position, o.Position 
+            track(i.Changed:Connect(function() 
+                if i.UserInputState == Enum.UserInputState.End then drag = false end 
+            end))
+        end 
+    end))
+    track(o.InputChanged:Connect(function(i) 
+        if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then 
+            dInput = i 
+        end 
+    end))
+    track(UserInputService.InputChanged:Connect(function(i) 
+        if i == dInput and drag then 
+            local d = i.Position - dStart 
+            o.Position = UDim2.new(sPos.X.Scale, sPos.X.Offset + d.X, sPos.Y.Scale, sPos.Y.Offset + d.Y) 
         end 
     end))
 end
