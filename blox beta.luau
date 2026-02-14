@@ -1,155 +1,63 @@
 local Players, RunService, UserInputService, CoreGui, ReplicatedStorage, TweenService, HttpService, TeleportService, Lighting, VirtualUser = game:GetService("Players"), game:GetService("RunService"), game:GetService("UserInputService"), game:GetService("CoreGui"), game:GetService("ReplicatedStorage"), game:GetService("TweenService"), game:GetService("HttpService"), game:GetService("TeleportService"), game:GetService("Lighting"), game:GetService("VirtualUser")
-local player, currentTab, guiVisible = Players.LocalPlayer, 1, true
+local player = Players.LocalPlayer
 local char = player.Character or player.CharacterAdded:Wait()
 player.CharacterAdded:Connect(function(c) char = c end)
-local ui_controls, configFolder, configFileName, allStrokes, allBtnStrokes = {}, "j4f", "j4f/config_j4f.json", {}, {}
-local hitboxEnabled, hitboxSize, showHitbox = {self = false, others = false, mob = false}, {self = 10, others = 10, mob = 10}, {self = false, others = false, mob = false}
+ local hitboxEnabled, hitboxSize, showHitbox = {self = false, others = false, mob = false}, {self = 10, others = 10, mob = 10}, {self = false, others = false, mob = false}
 local selectedBodyParts = {
     self = {Head = false, Torso = false, ["Left Arm"] = false, ["Right Arm"] = false, ["Left Leg"] = false, ["Right Leg"] = false, HumanoidRootPart = false},
     others = {Head = false, Torso = false, ["Left Arm"] = false, ["Right Arm"] = false, ["Left Leg"] = false, ["Right Leg"] = false, HumanoidRootPart = false},
     mob = {Head = false, Torso = false, ["Left Arm"] = false, ["Right Arm"] = false, ["Left Leg"] = false, ["Right Leg"] = false, HumanoidRootPart = false}
 }
 local mobPath, originalProperties, processedParts, mobCache = "workspace", setmetatable({}, {__mode = "k"}), {}, {lastScan = 0, list = {}}
-local auraEnabled, auraFruitEnabled = true, true
-local fastMeleeMultiplier, fastFruitMultiplier = 1, 1
-local selectedAttacks = {true, false, false, false, false}
-local last2s, last10s = 0, 0
+local auraEnabled, auraRadius, auraDelay, lastHitTime, hitCount, auraMode = true, 1000, 0.01, 0, 0, "Unencode"
+local auraFruitEnabled, auraFruitRadius, auraFruitDelay = true, 500, 0.01
 local attackRemote, hitRemote, auraConnection, isSpamming, spamConnection, lastAttack = nil, nil, nil, false, nil, 0
 local proxyRemote, seedVal, attackRemoteDirect, hitRemoteDirect = nil, nil, nil, nil
-local boatSpeed = 200
-local flags = {
-    autoRaceV3 = false, autoBuso = true, infinityJump = false, antiAfk = true,
-    jumpHeight = false, waterWalk = true, antiWater = true, flyBoat = false,
-    autoActiveV4 = false, autoTradeBones = false, autoStoreFruit = false, autoDungeon = false,
-    autoBoss = false, autoBossHop = false, customBoss = false, autoUpgradeRace = false,
-    autoFarmBones = false, autoCakeFarm = false, autoCakeSpawn = false, autoRandomFruit = false,
-    fastM1 = false, tpEnabled = false
-}
-local vals = {
-    jumpHeight = 7.2, dashLength = 0, antiWaterThreshold = -0.807,
-    flyBoatSpeed = 200, flyBoatHeight = 125, flyBoatStyle = "Default",
-    autoChestMirage = false, autoChestStyle = "Tween", autoChestType = "All",
-    autoEquipType = "Melee", auraRadius = 1000, auraDelay = 0.01, auraMode = "Unencode",
-    auraFruitRadius = 500, auraFruitDelay = 0.01
-}
-local islandFlags = {["Mirage Island"] = false, ["Kitsune Island"] = false, ["Prehistoric Island"] = false}
-local islandEspFlags = {["Mirage Island"] = false, ["Kitsune Island"] = false, ["Prehistoric Island"] = false}
-local espSettings = { Enabled = false, ShowText = true, ShowBar = true }
+local selectedAttacks, fastM1Enabled, fastMeleeMultiplier, fastFruitMultiplier = {true, true, true, true, true}, false, 1, 1
+local boatSpeed, tpEnabled, tpSpeed, autoRaceV3Enabled, autoBusoEnabled, infinityJumpEnabled, antiAfkEnabled = 200, false, 2, false, true, false, true
+local jumpHeightEnabled, jumpHeightValue, dashLengthValue, waterWalkEnabled, antiWaterEnabled, antiWaterThreshold = false, 7.2, 0, true, true, -0.807
+local flyBoatEnabled, flyBoatSpeed, flyBoatHeight, currentBoat, flyBoatStyle, isPlayerOnBoat = false, 200, 125, nil, "Default", false
+local islandTweenEnabled, islandTweenSpeed = {["Mirage Island"] = false, ["Kitsune Island"] = false, ["Prehistoric Island"] = false}, 360
+local espSettings, espConnection, espBillboards = { Enabled = false, ShowText = true, ShowBar = true }, nil, {}
+local islandEspSettings, islandEspBillboards = { Enabled = false, ESP_List = {["Mirage Island"] = false, ["Kitsune Island"] = false, ["Prehistoric Island"] = false} }, {}
+local autoChestMirage, autoChestStyle, autoChestType, autoActiveV4Enabled, autoTradeBonesEnabled, autoStoreFruitEnabled, autoDungeonEnabled = false, "Tween", "All", false, false, false, false
+local autoBossEnabled, autoBossHopEnabled, customBossEnabled, selectedBosses = false, false, false, {}
+local autoUpgradeRaceEnabled = false
+local autoFarmBonesEnabled, autoBoneTargetObj = false, nil
 local boneMobs = {"Reborn Skeleton", "Demonic Soul", "Posessed Mummy", "Living Zombie"}
+local autoBossTargetObj, lastBossDeadTime, masterBossList = nil, 0, {}
+local autoCakeFarmEnabled, autoCakeSpawnEnabled, autoCakeTargetObj = false, false, nil
 local cakeMobs = {"Cake Prince", "Baking Staff", "Cake Guard", "Cookie Crafter", "Head Baker"}
-local selectedBosses = {}
-local autoBoneTargetObj, autoCakeTargetObj, autoBossTargetObj = nil, nil, nil
-local lastBossDeadTime, masterBossList = 0, {}
-local characterParts = {}
-local THEME = {
-    BG_MAIN = Color3.fromRGB(255, 255, 255),
-    BG_SIDE = Color3.fromRGB(245, 245, 250),
-    BG_CONTENT = Color3.fromRGB(255, 255, 255),
-    ACCENT = Color3.fromRGB(255, 215, 0),
-    TEXT = Color3.fromRGB(0, 0, 0),
-    TEXT_DIM = Color3.fromRGB(80, 80, 80),
-    GREEN = Color3.fromRGB(34, 139, 34),
-    RED = Color3.fromRGB(178, 34, 34),
-    DARK_ITEM = Color3.fromRGB(235, 235, 240)
-}
+local autoEquipType = "Melee" 
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local baseScanInterval = isMobile and 0.8 or 0.5
+local scanInterval, espInterval = baseScanInterval, isMobile and 1.0 or 0.5
+local characterParts, lastFoamState, safeHeight = {}, nil, 15
+local autoRandomFruitEnabled = false
+-- Load RedzUI Library
+local redzlib = loadstring(game:HttpGet("https://raw.githubusercontent.com/hihiae/36var/refs/heads/main/RedzUi5s"))()
 
-local function corner(p, r) local c = Instance.new("UICorner", p) c.CornerRadius = UDim.new(0, r or 8) return c end
-local function stroke(p, c, t, b) local s = Instance.new("UIStroke", p) s.Color = c or (THEME.ACCENT) s.Thickness = t or 1 s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border return s end
-local function toHex(c3) return string.format("#%02X%02X%02X", c3.R*255, c3.G*255, c3.B*255) end
-local function fromHex(h) h = h:gsub("#","") local r,g,b = tonumber(h:sub(1,2),16), tonumber(h:sub(3,4),16), tonumber(h:sub(5,6),16) return Color3.fromRGB(r or 255, g or 255, b or 255) end
-local function tween(o, p, d) TweenService:Create(o, TweenInfo.new(d or 0.3, Enum.EasingStyle.Quart), p):Play() end
-local function makeDraggable(o)
-    local drag, dInput, dStart, sPos
-    o.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then drag, dStart, sPos = true, i.Position, o.Position i.Changed:Connect(function() if i.UserInputState == Enum.UserInputState.End then drag = false end end) end end)
-    o.InputChanged:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then dInput = i end end)
-    UserInputService.InputChanged:Connect(function(i) if i == dInput and drag then local d = i.Position - dStart o.Position = UDim2.new(sPos.X.Scale, sPos.X.Offset + d.X, sPos.Y.Scale, sPos.Y.Offset + d.Y) end end)
-end
-local function refreshUI()
-    if ScreenGui:FindFirstChild("MainFrame") then
-        local m = ScreenGui.MainFrame m.BackgroundColor3, m.BackgroundTransparency = THEME.BG_MAIN, 0.3
-        local s = m:FindFirstChild("Sidebar") if s then s.BackgroundColor3, s.BackgroundTransparency = THEME.BG_SIDE, 0.4 local l = s:FindFirstChild("SidebarLabel") if l then l.TextColor3 = THEME.ACCENT end end
-        for _,v in allStrokes or {} do v.Color = THEME.ACCENT end
-        for _,v in allBtnStrokes or {} do v.Color = THEME.ACCENT end
-    end
-end
+local Window = redzlib:MakeWindow({
+    Name = "j4f",
+    SubTitle = "by tiktok: @realayako",
+    SaveFolder = "j4f_config"
+})
 
-local ScreenGui = Instance.new("ScreenGui", CoreGui) ScreenGui.Name, ScreenGui.ResetOnSpawn = "HB_PRO_V3", false
-local ToggleBtn = Instance.new("ImageButton", ScreenGui) ToggleBtn.Size, ToggleBtn.Position, ToggleBtn.BackgroundColor3, ToggleBtn.BackgroundTransparency, ToggleBtn.Image, ToggleBtn.ScaleType, ToggleBtn.ZIndex = UDim2.new(0,60,0,60), UDim2.new(0.02,0,0.5,-30), THEME.BG_SIDE, 0.2, "rbxthumb://type=Asset&id=84053545044369&w=420&h=420", Enum.ScaleType.Fit, 15
-corner(ToggleBtn,12) stroke(ToggleBtn,THEME.ACCENT,2,true) makeDraggable(ToggleBtn)
-local MainFrame = Instance.new("Frame", ScreenGui) MainFrame.Name, MainFrame.Size, MainFrame.Position, MainFrame.BackgroundColor3, MainFrame.BackgroundTransparency, MainFrame.BorderSizePixel, MainFrame.ClipsDescendants = "MainFrame", UDim2.new(0,540,0,340), UDim2.new(0.5,-270,0.5,-170), THEME.BG_MAIN, 0.3, 0, true
-corner(MainFrame,12) stroke(MainFrame,THEME.ACCENT,2,false) makeDraggable(MainFrame)
-local Sidebar = Instance.new("Frame", MainFrame) Sidebar.Size, Sidebar.BackgroundColor3, Sidebar.BackgroundTransparency, Sidebar.BorderSizePixel = UDim2.new(0,110,1,0), THEME.BG_SIDE, 0.4, 0 corner(Sidebar,12)
-local SidebarLabel = Instance.new("TextLabel", Sidebar) SidebarLabel.Size, SidebarLabel.Position, SidebarLabel.BackgroundTransparency, SidebarLabel.Text, SidebarLabel.TextColor3, SidebarLabel.Font, SidebarLabel.TextSize = UDim2.new(1,0,0,35), UDim2.new(0,0,0,5), 1, "j4f", THEME.ACCENT, Enum.Font.GothamBold, 22
-local AuthorLabel = Instance.new("TextLabel", Sidebar) AuthorLabel.Size, AuthorLabel.Position, AuthorLabel.BackgroundTransparency, AuthorLabel.Text, AuthorLabel.TextColor3, AuthorLabel.Font, AuthorLabel.TextSize = UDim2.new(1,0,0,20), UDim2.new(0,0,0,35), 1, "by tiktok: @realayako", THEME.TEXT_DIM, Enum.Font.GothamMedium, 10
-local TabContainer = Instance.new("Frame", Sidebar) TabContainer.Size, TabContainer.Position, TabContainer.BackgroundTransparency = UDim2.new(1,0,1,-70), UDim2.new(0,0,0,70), 1
-local TabLayout = Instance.new("UIListLayout", TabContainer) TabLayout.Padding, TabLayout.HorizontalAlignment = UDim.new(0,6), Enum.HorizontalAlignment.Center
-ToggleBtn.MouseButton1Click:Connect(function() guiVisible = not guiVisible MainFrame.Visible = guiVisible tween(ToggleBtn, {BackgroundTransparency = guiVisible and 0.3 or 0.2}, 0.2) end)
-local ContentArea = Instance.new("Frame", MainFrame) ContentArea.Size, ContentArea.Position, ContentArea.BackgroundTransparency = UDim2.new(1,-125,1,-15), UDim2.new(0,120,0,10), 1
-local pages, tabBtns = {}, {}
-local function createTab(name)
-    local b = Instance.new("TextButton", TabContainer) b.Size, b.BackgroundColor3, b.BackgroundTransparency, b.Text, b.TextColor3, b.Font, b.TextSize = UDim2.new(0.85,0,0,36), THEME.DARK_ITEM, 1, name, THEME.TEXT_DIM, Enum.Font.GothamBold, 12 corner(b,8) stroke(b,THEME.DARK_ITEM,1,true)
-    local p = Instance.new("ScrollingFrame", ContentArea) p.Size, p.BackgroundTransparency, p.Visible, p.ScrollBarThickness, p.ScrollBarImageColor3, p.AutomaticCanvasSize = UDim2.new(1,0,1,0), 1, false, 2, THEME.ACCENT, Enum.AutomaticSize.Y
-    local l = Instance.new("UIListLayout", p) l.Padding, l.SortOrder = UDim.new(0,8), Enum.SortOrder.LayoutOrder
-    b.MouseButton1Click:Connect(function() for _,x in pages do x.Visible = false end for _,x in tabBtns do tween(x,{BackgroundTransparency=1,TextColor3=THEME.TEXT_DIM},0.2) end p.Visible, b.BackgroundTransparency, b.TextColor3 = true, 0, THEME.ACCENT end)
-    table.insert(pages, p) table.insert(tabBtns, b) return p
-end
-
-local function addSection(parent, title)
-    local f = Instance.new("Frame", parent) f.Size, f.BackgroundTransparency = UDim2.new(1,0,0,26), 1
-    local l = Instance.new("TextLabel", f) l.Size, l.Position, l.BackgroundTransparency, l.Text, l.TextColor3, l.Font, l.TextSize, l.TextXAlignment = UDim2.new(1,0,1,-4), UDim2.new(0,4,0,0), 1, title:upper(), THEME.ACCENT, Enum.Font.GothamBold, 10, 0
-    local line = Instance.new("Frame", f) line.Size, line.Position, line.BackgroundColor3, line.BackgroundTransparency, line.BorderSizePixel = UDim2.new(1,0,0,1), UDim2.new(0,0,1,-2), THEME.ACCENT, 0.5, 0 return f
-end
-
-local function addToggle(p, t, d, c)
-    local f = Instance.new("Frame", p) f.Size, f.BackgroundColor3, f.BackgroundTransparency = UDim2.new(1,0,0,30), THEME.BG_CONTENT, 0.4 corner(f,6) stroke(f, THEME.ACCENT)
-    local l = Instance.new("TextLabel", f) l.Size, l.Position, l.BackgroundTransparency, l.Text, l.TextColor3, l.Font, l.TextSize, l.TextXAlignment = UDim2.new(1,-50,1,0), UDim2.new(0,10,0,0), 1, t, THEME.TEXT, Enum.Font.Gotham, 11, 0
-    local b = Instance.new("TextButton", f) b.Size, b.Position, b.BackgroundColor3, b.Text = UDim2.new(0,30,0,16), UDim2.new(1,-40,0.5,-8), d and THEME.ACCENT or Color3.fromRGB(200,200,200), "" corner(b,8) stroke(b, THEME.ACCENT)
-    local o = Instance.new("Frame", b) o.Size, o.Position, o.BackgroundColor3 = UDim2.new(0,12,0,12), UDim2.new(d and 1 or 0, d and -14 or 2, 0.5, -6), Color3.new(1,1,1) corner(o,6)
-    local en = d b.MouseButton1Click:Connect(function() en = not en tween(b,{BackgroundColor3=en and THEME.ACCENT or Color3.fromRGB(200,200,200)},0.2) tween(o,{Position=UDim2.new(en and 1 or 0, en and -14 or 2, 0.5,-6)},0.2) c(en) end)
-    return {Set = function(v) en = v b.BackgroundColor3 = en and THEME.ACCENT or Color3.fromRGB(200,200,200) o.Position = UDim2.new(en and 1 or 0, en and -14 or 2, 0.5,-6) end}
-end
-local function addSlider(p, t, min, max, d, dec, c)
-    local f = Instance.new("Frame", p) f.Size, f.BackgroundColor3, f.BackgroundTransparency = UDim2.new(1,0,0,42), THEME.BG_CONTENT, 0.4 corner(f,6) stroke(f, THEME.ACCENT)
-    local l = Instance.new("TextLabel", f) l.Size, l.Position, l.BackgroundTransparency, l.Text, l.TextColor3, l.Font, l.TextSize, l.TextXAlignment = UDim2.new(1,-20,0,20), UDim2.new(0,10,0,4), 1, t..": "..d, THEME.TEXT, Enum.Font.Gotham, 11, 0
-    local bg = Instance.new("Frame", f) bg.Size, bg.Position, bg.BackgroundColor3 = UDim2.new(1,-20,0,3), UDim2.new(0,10,0,30), Color3.new(0,0,0) corner(bg,2)
-    local fill = Instance.new("Frame", bg) fill.Size, fill.BackgroundColor3 = UDim2.new((d-min)/(max-min),0,1,0), THEME.ACCENT corner(fill,2)
-    local btn = Instance.new("Frame", bg) btn.Size, btn.Position, btn.BackgroundColor3 = UDim2.new(0,10,0,10), UDim2.new((d-min)/(max-min),-5,0.5,-5), THEME.ACCENT corner(btn,5)
-    local tr = Instance.new("TextButton", f) tr.Size, tr.BackgroundTransparency, tr.Text = UDim2.new(1,0,1,0), 1, ""
-    local prec, drag = 10^(dec or 0), false
-    local function fV(v) return (dec or 0) <= 0 and tostring(math.round(v)) or tostring(math.floor(v*prec+0.5)/prec) end
-    local function up(i) local rel = math.clamp((i.Position.X-bg.AbsolutePosition.X)/bg.AbsoluteSize.X, 0, 1) local v = math.floor((min+(max-min)*rel)*prec+0.5)/prec l.Text, fill.Size, btn.Position = t..": "..fV(v), UDim2.new(rel,0,1,0), UDim2.new(rel,-5,0.5,-5) c(v) end
-    tr.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then drag = true up(i) end end)
-    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then drag = false end end)
-    UserInputService.InputChanged:Connect(function(i) if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then up(i) end end)
-    return {Set = function(v) local rel = math.clamp((v-min)/(max-min), 0,1) l.Text, fill.Size, btn.Position = t..": "..fV(v), UDim2.new(rel,0,1,0), UDim2.new(rel,-5,0.5,-5) end}
-end
-local function addInput(p, t, d, ph, c)
-    local f = Instance.new("Frame", p) f.Size, f.BackgroundColor3 = UDim2.new(1,0,0,55), THEME.BG_CONTENT corner(f,6)
-    local l = Instance.new("TextLabel", f) l.Size, l.Position, l.BackgroundTransparency, l.Text, l.TextColor3, l.Font, l.TextSize, l.TextXAlignment = UDim2.new(1,-20,0,25), UDim2.new(0,12,0,5), 1, t, THEME.TEXT, Enum.Font.Gotham, 13, 0
-    local i = Instance.new("TextBox", f) i.Size, i.Position, i.BackgroundColor3, i.Text, i.PlaceholderText, i.TextColor3, i.Font, i.TextSize, i.ClearTextOnFocus = UDim2.new(1,-24,0,24), UDim2.new(0,12,0,26), THEME.BG_MAIN, d, ph, THEME.TEXT, Enum.Font.Gotham, 12, false corner(i,4) i.FocusLost:Connect(function() c(i.Text) end) return i
-end
-local function addButton(p, t, cl, c)
-    local b = Instance.new("TextButton", p) b.Size, b.BackgroundColor3, b.Text, b.TextColor3, b.Font, b.TextSize = UDim2.new(1,0,0,30), cl or THEME.DARK_ITEM, t, THEME.TEXT, Enum.Font.GothamBold, 11 corner(b,6)
-    b.MouseButton1Click:Connect(function() tween(b,{BackgroundTransparency=0.5},0.1) task.wait(0.1) tween(b,{BackgroundTransparency=0},0.1) c() end) return b
-end
-local function addDropdown(p, t, is, d, c)
-    local f = Instance.new("Frame", p) f.Size, f.BackgroundColor3, f.BackgroundTransparency, f.ClipsDescendants = UDim2.new(1,0,0,32), THEME.BG_CONTENT, 0.4, true corner(f,6) stroke(f, THEME.ACCENT)
-    local l = Instance.new("TextButton", f) l.Size, l.BackgroundTransparency, l.Text, l.TextColor3, l.Font, l.TextSize, l.TextXAlignment = UDim2.new(1,0,0,32), 1, "  "..t..": "..d, THEME.TEXT, Enum.Font.Gotham, 11, 0
-    local list = Instance.new("Frame", f) list.Size, list.Position, list.BackgroundTransparency = UDim2.new(1,0,0,#is*26), UDim2.new(0,0,0,32), 1 Instance.new("UIListLayout", list)
-    for _,v in is do
-        local ib = Instance.new("TextButton", list) ib.Size, ib.BackgroundColor3, ib.BackgroundTransparency, ib.BorderSizePixel, ib.Text, ib.TextColor3, ib.Font, ib.TextSize, ib.TextXAlignment = UDim2.new(1,0,0,26), THEME.DARK_ITEM, 0.5, 0, "    "..tostring(v), THEME.TEXT_DIM, Enum.Font.Gotham, 10, 0
-        ib.MouseButton1Click:Connect(function() l.Text = "  "..t..": "..tostring(v) tween(f,{Size=UDim2.new(1,0,0,32)},0.2) c(v) end)
-    end
-    local op = false l.MouseButton1Click:Connect(function() op = not op tween(f,{Size=UDim2.new(1,0,0,op and (32+#is*26) or 32)},0.2) end)
-    return {Set = function(v) l.Text = "  "..t..": "..tostring(v) end}
-end
-local function addCollapsible(p, ti)
-    local c = Instance.new("Frame", p) c.Size, c.BackgroundColor3, c.BackgroundTransparency, c.ClipsDescendants, c.BorderSizePixel = UDim2.new(1,0,0,30), THEME.BG_CONTENT, 0.4, true, 0 corner(c,6) stroke(c, THEME.ACCENT)
-    local b = Instance.new("TextButton", c) b.Size, b.BackgroundTransparency, b.Text, b.TextColor3, b.Font, b.TextSize, b.TextXAlignment = UDim2.new(1,0,0,30), 1, "  "..ti.." ▼", THEME.TEXT, Enum.Font.GothamBold, 10, 0
-    local con = Instance.new("Frame", c) con.Position, con.Size, con.BackgroundTransparency = UDim2.new(0,0,0,30), UDim2.new(1,0,0,0), 1 local ly = Instance.new("UIListLayout", con) ly.Padding = UDim.new(0,4)
-    local op = false b.MouseButton1Click:Connect(function() op = not op local h = op and (30+ly.AbsoluteContentSize.Y+8) or 30 tween(c,{Size=UDim2.new(1,0,0,h)},0.3) b.Text, b.TextColor3 = "  "..ti..(op and " ▲" or " ▼"), op and THEME.ACCENT or THEME.TEXT end)
-    ly:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() if op then c.Size = UDim2.new(1,0,0,30+ly.AbsoluteContentSize.Y+8) end end) return con
-end
+-- Toggle Button (show/hide GUI)
+local ToggleBtnInfo = Window:AddMinimizeButton({
+    Button = {
+        Image = "rbxassetid://84053545044369",
+        Size = UDim2.fromOffset(45, 45), -- Thu nhỏ nút lại
+        BackgroundColor3 = Color3.fromRGB(15, 15, 15),
+        BackgroundTransparency = 0.2
+    }
+})
+local ToggleBtn = ToggleBtnInfo.Button
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 10)
+local ToggleStroke = Instance.new("UIStroke", ToggleBtn)
+ToggleStroke.Color = Color3.fromRGB(255, 215, 0)
+ToggleStroke.Thickness = 1.5
+ToggleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
 -- Logic
 local function saveOriginal(p) if not originalProperties[p] then originalProperties[p] = {Size=p.Size, Transparency=p.Transparency, CanCollide=p.CanCollide, Color=p.Color, Material=p.Material} end end
@@ -190,7 +98,8 @@ local function expandHitbox(tt)
             mobCache.lastScan = tick() 
             mobCache.list = {} 
             pcall(function() 
-                local folder = workspace:FindFirstChild("Enemies") or workspace
+                local folder = game
+                for s in string.gmatch(mobPath, "[^%.]+") do folder = folder:FindFirstChild(s) or folder:WaitForChild(s, 1) end
                 for _,d in ipairs(folder:GetChildren()) do 
                     if d:IsA("Model") and d:FindFirstChildOfClass("Humanoid") then 
                         table.insert(mobCache.list, d) 
@@ -239,13 +148,6 @@ local function encodeName(remoteName)
         encoded = encoded .. string.char(bit32.bxor(string.byte(remoteName, i), key))
     end
     return encoded
-end
-
-local function GetCommF()
-    return ReplicatedStorage:WaitForChild("Remotes", 5):WaitForChild("CommF_", 5)
-end
-local function GetCommE()
-    return ReplicatedStorage:WaitForChild("Remotes", 5):WaitForChild("CommE", 5)
 end
 
 task.spawn(function()
@@ -313,7 +215,7 @@ local function getTargets(): {Model}
             local pHum = pChar:FindFirstChildOfClass("Humanoid")
             if pHRP and pHum and pHum.Health > 0 then
                 local d = (myPos - pHRP.Position).Magnitude
-                if d <= vals.auraRadius then table.insert(targets, {model = pChar, dist = d}) end
+                if d <= auraRadius then table.insert(targets, {model = pChar, dist = d}) end
             end
         end
     end
@@ -326,7 +228,7 @@ end
 local function performHit()
     if not auraEnabled then return end
     local now = tick()
-    if now - lastHitTime < vals.auraDelay then return end
+    if now - lastHitTime < auraDelay then return end
     lastHitTime = now
     local targets = getTargets()
     if #targets == 0 then return end
@@ -339,7 +241,7 @@ local function performHit()
         end
     end
     if not firstPart then return end
-    if vals.auraMode == "Encode" then
+    if auraMode == "Encode" then
         if proxyRemote and seedVal then
             local rId = tonumber(proxyRemote:GetAttribute("Id"))
             if rId then
@@ -358,7 +260,7 @@ local function performHit()
                 hitRemoteDirect:FireServer(firstPart, multiTargets, nil, generateID())
             end)
         end
-    elseif vals.auraMode == "Unencode" then
+    elseif auraMode == "Unencode" then
         if attackRemoteDirect and hitRemoteDirect then
             pcall(function()
                 attackRemoteDirect:FireServer()
@@ -370,8 +272,8 @@ end
 
 local function applyFastM1()
     if not char then return end
-    char:SetAttribute("AttackSpeedMultiplier", flags.fastM1 and fastMeleeMultiplier or 1)
-    char:SetAttribute("FruitTAPCooldown", flags.fastM1 and fastFruitMultiplier or 1)
+    char:SetAttribute("AttackSpeedMultiplier", fastM1Enabled and fastMeleeMultiplier or 1)
+    char:SetAttribute("FruitTAPCooldown", fastM1Enabled and fastFruitMultiplier or 1)
 end
 
 local function getCurrentTool()
@@ -419,7 +321,7 @@ end
 local function spamFruit()
     if not auraFruitEnabled then return end
     local now = tick()
-    if now - lastAttack < vals.auraFruitDelay then return end
+    if now - lastAttack < auraFruitDelay then return end
     lastAttack = now
     local tool, remote = getCurrentTool()
     if not tool or not remote then return end
@@ -427,7 +329,7 @@ local function spamFruit()
     if not target or not char:FindFirstChild("HumanoidRootPart") then return end
     
     local dist = (target.Position - char.HumanoidRootPart.Position).Magnitude
-    if dist > vals.auraFruitRadius then return end
+    if dist > auraFruitRadius then return end
     
     local dir = (target.Position - char.HumanoidRootPart.Position).Unit
     for i = 1, 5 do if selectedAttacks[i] then pcall(function() remote:FireServer(dir, i, true) end) end end
@@ -442,7 +344,7 @@ local function updateBoatSpeeds()
     local count = 0
     for _, b in workspace.Boats:GetChildren() do
         local vs = b:FindFirstChild("VehicleSeat")
-        if vs and vs:IsA("VehicleSeat") then vs.MaxSpeed = vals.flyBoatSpeed; count += 1 end
+        if vs and vs:IsA("VehicleSeat") then vs.MaxSpeed = boatSpeed; count += 1 end
     end
     if boatStatusLabel then
         if count > 0 then boatStatusLabel.Text = "✅ Đang tăng tốc: "..count.." thuyền" boatStatusLabel.TextColor3 = THEME.GREEN
@@ -687,111 +589,114 @@ local function updateIslandESP()
     for obj, b in islandEspBillboards do if not currentActive[obj] then if b then b:Destroy() end islandEspBillboards[obj] = nil end end
 end
 
-local TabHitbox = createTab("j4f")
-local TabSpecialFarm = createTab("Special Farm")
-local TabBlox = createTab("Blox Fruit")
-local TabUtils = createTab("Utils")
-local TabSettings = createTab("Settings")
+local TabHitbox = Window:MakeTab({Title = "j4f", Icon = "crosshair"})
+local TabSpecialFarm = Window:MakeTab({Title = "Special Farm", Icon = "bomb"})
+local TabBlox = Window:MakeTab({Title = "Blox Fruit", Icon = "swords"})
+local TabUtils = Window:MakeTab({Title = "Utils", Icon = "cog"})
+local TabSettings = Window:MakeTab({Title = "Settings", Icon = "settings"})
 
 -- HITBOX TAB
 local currentHBT = "self"
-local hbToggleUi, hbSizeUi, hbShowUi, hbPathUi, hbMobSection, partToggles = nil, nil, nil, nil, nil, {}
+local hbToggleUi, hbSizeUi, hbShowUi, partToggles = nil, nil, nil, {}
 
-addSection(TabHitbox, "Target Settings")
-addDropdown(TabHitbox, "Select Target", {"Self", "Players", "Mobs"}, "Self", function(v)
-    local mapping = {["Self"] = "self", ["Players"] = "others", ["Mobs"] = "mob"}
-    currentHBT = mapping[v] or "self"
-    hbToggleUi.Set(hitboxEnabled[currentHBT]) hbSizeUi.Set(hitboxSize[currentHBT]) hbShowUi.Set(showHitbox[currentHBT])
-    local isMob = (currentHBT == "mob")
-    if hbMobSection then hbMobSection.Visible = isMob end
-    if hbPathUi then hbPathUi.Parent.Visible = isMob end
-    for p, toggle in pairs(partToggles) do toggle.Set(selectedBodyParts[currentHBT][p]) end
-end)
+TabHitbox:AddSection({Name = "Target Settings"})
+TabHitbox:AddDropdown({
+    Title = "Select Target",
+    Options = {"Self", "Players", "Mobs"},
+    Default = "Self",
+    Callback = function(v)
+        local mapping = {["Self"] = "self", ["Players"] = "others", ["Mobs"] = "mob"}
+        currentHBT = mapping[v] or "self"
+        if hbToggleUi then hbToggleUi:Set(hitboxEnabled[currentHBT]) end
+        if hbSizeUi then hbSizeUi:Set(hitboxSize[currentHBT]) end
+        if hbShowUi then hbShowUi:Set(showHitbox[currentHBT]) end
+        for p, toggle in pairs(partToggles) do toggle:Set(selectedBodyParts[currentHBT][p]) end
+    end
+})
 
-addSection(TabHitbox, "Hitbox Controls")
-hbToggleUi = addToggle(TabHitbox, "Enabled", false, function(v) hitboxEnabled[currentHBT] = v if not v then disableHitbox(currentHBT) end end) ui_controls.hbToggle = hbToggleUi
-hbSizeUi = addSlider(TabHitbox, "Size", 5, 500, 10, 0, function(v) hitboxSize[currentHBT] = v end) ui_controls.hbSize = hbSizeUi
-hbShowUi = addToggle(TabHitbox, "Show Hitbox", false, function(v) showHitbox[currentHBT] = v end) ui_controls.hbShow = hbShowUi
+TabHitbox:AddSection({Name = "Hitbox Controls"})
+hbToggleUi = TabHitbox:AddToggle({Title = "Enabled", Default = false, Callback = function(v) hitboxEnabled[currentHBT] = v if not v then disableHitbox(currentHBT) end end})
+hbSizeUi = TabHitbox:AddSlider({Title = "Size", Min = 5, Max = 500, Default = 10, Increase = 1, Callback = function(v) hitboxSize[currentHBT] = v end})
+hbShowUi = TabHitbox:AddToggle({Title = "Show Hitbox", Default = false, Callback = function(v) showHitbox[currentHBT] = v end})
 
-addSection(TabHitbox, "Part Selection")
-local partList = addCollapsible(TabHitbox, "Select Body Parts")
+TabHitbox:AddSection({Name = "Part Selection"})
 local parts = {"Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg", "HumanoidRootPart"}
 for _, p in ipairs(parts) do 
-    partToggles[p] = addToggle(partList, p, false, function(v) selectedBodyParts[currentHBT][p] = v end)
-    ui_controls["part_"..p] = partToggles[p]
+    partToggles[p] = TabHitbox:AddToggle({Title = p, Default = false, Callback = function(v) selectedBodyParts[currentHBT][p] = v end})
 end
 
-hbMobSection = addSection(TabHitbox, "Mob Settings")
-hbPathUi = addInput(TabHitbox, "Mob Path", mobPath, "workspace.Enemies", function(v) mobPath = v end) ui_controls.hbPath = hbPathUi
-hbMobSection.Visible = false hbPathUi.Parent.Visible = false
+TabHitbox:AddSection({Name = "Mob Settings"})
+TabHitbox:AddTextBox({Title = "Mob Path", Default = mobPath, PlaceholderText = "workspace.Enemies", Callback = function(v) mobPath = v end})
 
-addSection(TabHitbox, "Danger Zone")
-addButton(TabHitbox, "Reset Hitbox Configuration", THEME.RED, function()
+TabHitbox:AddSection({Name = "Danger Zone"})
+TabHitbox:AddButton({Title = "Reset Hitbox Configuration", Callback = function()
     hitboxEnabled[currentHBT], hitboxSize[currentHBT], showHitbox[currentHBT] = false, 10, false
     for p, _ in pairs(selectedBodyParts[currentHBT]) do selectedBodyParts[currentHBT][p] = false end
-    disableHitbox(currentHBT) hbToggleUi.Set(false) hbSizeUi.Set(10) hbShowUi.Set(false)
-    for p, toggle in pairs(partToggles) do toggle.Set(false) end
-end)
+    disableHitbox(currentHBT)
+    if hbToggleUi then hbToggleUi:Set(false) end
+    if hbSizeUi then hbSizeUi:Set(10) end
+    if hbShowUi then hbShowUi:Set(false) end
+    for p, toggle in pairs(partToggles) do toggle:Set(false) end
+end})
 
 -- BLOX FRUIT TAB
-addSection(TabBlox, "Blox Fruit Config")
-local combatConfig = addCollapsible(TabBlox, "Config")
+TabBlox:AddSection({Name = "Combat Config"})
 
--- 1. Auto Equip
-ui_controls.autoEquip = addDropdown(combatConfig, "Auto Equip Weapon", {"Melee", "Sword", "Blox Fruit"}, "Melee", function(v) vals.autoEquipType = v end)
+-- Auto Equip
+TabBlox:AddDropdown({Title = "Auto Equip Weapon", Options = {"Melee", "Sword", "Blox Fruit"}, Default = "Melee", Callback = function(v) autoEquipType = v end})
 
--- 2. Aura Melee (Fast Attack)
-addSection(combatConfig, "Aura Melee")
-ui_controls.auraEnabled = addToggle(combatConfig, "Enabled", true, function(v) auraEnabled = v if v then auraConnection = RunService.Heartbeat:Connect(performHit) elseif auraConnection then auraConnection:Disconnect() auraConnection = nil end end)
+-- Aura Melee
+TabBlox:AddSection({Name = "Aura Melee"})
+TabBlox:AddToggle({Title = "Aura Melee Enabled", Default = true, Callback = function(v) auraEnabled = v if v then auraConnection = RunService.Heartbeat:Connect(performHit) elseif auraConnection then auraConnection:Disconnect() auraConnection = nil end end})
 if auraEnabled then auraConnection = RunService.Heartbeat:Connect(performHit) end
-ui_controls.auraRadius = addSlider(combatConfig, "Range", 5, 1000, 1000, 0, function(v) vals.auraRadius = v end)
-ui_controls.auraDelay = addSlider(combatConfig, "Delay", 0.01, 1, 0.01, 2, function(v) vals.auraDelay = v end)
-ui_controls.auraMode = addDropdown(combatConfig, "Mode", {"Fast Attack Unencode", "Fast Attack Encode"}, "Fast Attack Unencode", function(v) vals.auraMode = v:find("Encode") and "Encode" or "Unencode" end)
+TabBlox:AddSlider({Title = "Range", Min = 5, Max = 1000, Default = 1000, Increase = 1, Callback = function(v) auraRadius = v end})
+TabBlox:AddSlider({Title = "Delay", Min = 0.01, Max = 1, Default = 0.01, Increase = 0.01, Callback = function(v) auraDelay = v end})
+TabBlox:AddDropdown({Title = "Mode", Options = {"Fast Attack Unencode", "Fast Attack Encode"}, Default = "Fast Attack Unencode", Callback = function(v) auraMode = v:find("Encode") and "Encode" or "Unencode" end})
 
--- 3. Aura Fruit (Fast Attack Fruit)
-addSection(combatConfig, "Aura Fruit")
-ui_controls.fruitEnabled = addToggle(combatConfig, "Enabled", true, function(v) auraFruitEnabled = v if v then spamConnection = RunService.Heartbeat:Connect(spamFruit) elseif spamConnection then spamConnection:Disconnect() spamConnection = nil end end)
+-- Aura Fruit
+TabBlox:AddSection({Name = "Aura Fruit"})
+TabBlox:AddToggle({Title = "Aura Fruit Enabled", Default = true, Callback = function(v) auraFruitEnabled = v if v then spamConnection = RunService.Heartbeat:Connect(spamFruit) elseif spamConnection then spamConnection:Disconnect() spamConnection = nil end end})
 if auraFruitEnabled then spamConnection = RunService.Heartbeat:Connect(spamFruit) end
-ui_controls.fruitDelay = addSlider(combatConfig, "Delay", 0.01, 1, 0.01, 2, function(v) vals.auraFruitDelay = v end)
-addDropdown(combatConfig, "Select Skill", {"Skill 1", "Skill 2", "Skill 3", "Skill 4", "Skill 5"}, "Skill 1", function(v) local s = tonumber(v:match("%d+")) for i = 1, 5 do selectedAttacks[i] = (i == s) end end)
+TabBlox:AddSlider({Title = "Fruit Delay", Min = 0.01, Max = 10, Default = 0.01, Increase = 0.01, Callback = function(v) auraFruitDelay = v end})
+TabBlox:AddDropdown({Title = "Select Skill", Options = {"Skill 1", "Skill 2", "Skill 3", "Skill 4", "Skill 5"}, Default = "Skill 1", Callback = function(v) local s = tonumber(v:match("%d+")) for i = 1, 5 do selectedAttacks[i] = (i == s) end end})
 
--- 4. Auto Ability
-addSection(combatConfig, "Auto Ability")
-ui_controls.autoRaceV3 = addToggle(combatConfig, "Auto Race V3", false, function(v) flags.autoRaceV3 = v end)
-ui_controls.autoActiveV4 = addToggle(combatConfig, "Auto Active V4", false, function(v) flags.autoActiveV4 = v end)
-ui_controls.autoBuso = addToggle(combatConfig, "Auto Buso", true, function(v) flags.autoBuso = v end)
+-- Auto Ability
+TabBlox:AddSection({Name = "Auto Ability"})
+TabBlox:AddToggle({Title = "Auto Race V3", Default = false, Callback = function(v) autoRaceV3Enabled = v end})
+TabBlox:AddToggle({Title = "Auto Active V4", Default = false, Callback = function(v) autoActiveV4Enabled = v end})
+TabBlox:AddToggle({Title = "Auto Buso", Default = true, Callback = function(v) autoBusoEnabled = v end})
 
--- 5. Fast M1
-addSection(combatConfig, "Fast M1")
-ui_controls.fastM1Enabled = addToggle(combatConfig, "Enable Fast M1", false, function(v) flags.fastM1 = v applyFastM1() end)
-ui_controls.fastMelee = addSlider(combatConfig, "Melee/Gun Multi", 1, 5, 1, 0, function(v) fastMeleeMultiplier = math.floor(v + 0.5) applyFastM1() end)
-ui_controls.fastFruit = addSlider(combatConfig, "Fruit Multi", 1, 5, 1, 0, function(v) fastFruitMultiplier = math.floor(v + 0.5) applyFastM1() end)
+-- Fast M1
+TabBlox:AddSection({Name = "Fast M1"})
+TabBlox:AddToggle({Title = "Enable Fast M1", Default = false, Callback = function(v) fastM1Enabled = v applyFastM1() end})
+TabBlox:AddSlider({Title = "Melee/Gun Multi", Min = 1, Max = 5, Default = 1, Increase = 1, Callback = function(v) fastMeleeMultiplier = math.floor(v + 0.5) applyFastM1() end})
+TabBlox:AddSlider({Title = "Fruit Multi", Min = 1, Max = 5, Default = 1, Increase = 1, Callback = function(v) fastFruitMultiplier = math.floor(v + 0.5) applyFastM1() end})
 
--- 6. Bone Farm
-local boneFarmConfig = addCollapsible(TabSpecialFarm, "Bone Farm")
-ui_controls.autoFarmBones = addToggle(boneFarmConfig, "Auto Farm Bones", false, function(v) flags.autoFarmBones = v end)
-ui_controls.autoTradeBones = addToggle(boneFarmConfig, "Auto Trade Bones", false, function(v) flags.autoTradeBones = v end)
+-- Bone Farm (Special Farm Tab)
+TabSpecialFarm:AddSection({Name = "Bone Farm"})
+TabSpecialFarm:AddToggle({Title = "Auto Farm Bones", Default = false, Callback = function(v) autoFarmBonesEnabled = v end})
+TabSpecialFarm:AddToggle({Title = "Auto Trade Bones", Default = false, Callback = function(v) autoTradeBonesEnabled = v end})
 
-local secretIslandList = addCollapsible(TabBlox, "Secret Island")
-ui_controls.mirageEsp = addToggle(secretIslandList, "Mirage Island ESP", false, function(v) islandEspSettings.ESP_List["Mirage Island"] = v end)
-ui_controls.kitsuneEsp = addToggle(secretIslandList, "Kitsune Island ESP", false, function(v) islandEspSettings.ESP_List["Kitsune Island"] = v end)
-ui_controls.prehistoricEsp = addToggle(secretIslandList, "Prehistoric Island ESP", false, function(v) islandEspSettings.ESP_List["Prehistoric Island"] = v end)
+TabBlox:AddSection({Name = "Secret Island"})
+TabBlox:AddToggle({Title = "Mirage Island ESP", Default = false, Callback = function(v) islandEspSettings.ESP_List["Mirage Island"] = v end})
+TabBlox:AddToggle({Title = "Kitsune Island ESP", Default = false, Callback = function(v) islandEspSettings.ESP_List["Kitsune Island"] = v end})
+TabBlox:AddToggle({Title = "Prehistoric Island ESP", Default = false, Callback = function(v) islandEspSettings.ESP_List["Prehistoric Island"] = v end})
 
-addSection(secretIslandList, "Island Tween")
+TabBlox:AddSection({Name = "Island Tween"})
 local function islandTween(islandName, enabled) islandTweenEnabled[islandName] = enabled end
-ui_controls.tweenMirage = addToggle(secretIslandList, "Tween Mirage Island", false, function(v) islandTween("Mirage Island", v) end)
-ui_controls.tweenKitsune = addToggle(secretIslandList, "Tween Kitsune Island", false, function(v) islandTween("Kitsune Island", v) end)
-ui_controls.tweenPrehistoric = addToggle(secretIslandList, "Tween Prehistoric Island", false, function(v) islandTween("Prehistoric Island", v) end)
-ui_controls.tweenSpeed = addSlider(secretIslandList, "Tween Speed", 200, 500, 360, 0, function(v) islandTweenSpeed = v end)
+TabBlox:AddToggle({Title = "Tween Mirage Island", Default = false, Callback = function(v) islandTween("Mirage Island", v) end})
+TabBlox:AddToggle({Title = "Tween Kitsune Island", Default = false, Callback = function(v) islandTween("Kitsune Island", v) end})
+TabBlox:AddToggle({Title = "Tween Prehistoric Island", Default = false, Callback = function(v) islandTween("Prehistoric Island", v) end})
+TabBlox:AddSlider({Title = "Tween Speed", Min = 200, Max = 500, Default = 360, Increase = 1, Callback = function(v) islandTweenSpeed = v end})
 
-addSection(secretIslandList, "Auto Chest Mirage")
-ui_controls.autoChest = addToggle(secretIslandList, "Enabled Auto Chest", false, function(v) vals.autoChestMirage = v end)
-ui_controls.autoChestStyle = addDropdown(secretIslandList, "Chest Style", {"TP", "Tween"}, "Tween", function(v) vals.autoChestStyle = v end)
-ui_controls.autoChestType = addDropdown(secretIslandList, "Chest Type", {"All", "Fragment", "Mirage"}, "All", function(v) vals.autoChestType = v end)
+TabBlox:AddSection({Name = "Auto Chest Mirage"})
+TabBlox:AddToggle({Title = "Enabled Auto Chest", Default = false, Callback = function(v) autoChestMirage = v end})
+TabBlox:AddDropdown({Title = "Chest Style", Options = {"TP", "Tween"}, Default = "Tween", Callback = function(v) autoChestStyle = v end})
+TabBlox:AddDropdown({Title = "Chest Type", Options = {"All", "Fragment", "Mirage"}, Default = "All", Callback = function(v) autoChestType = v end})
 
-local trialSection = addCollapsible(TabBlox, "Trial")
-ui_controls.autoUpgradeRace = addToggle(trialSection, "Auto Upgrade Race", false, function(v) flags.autoUpgradeRace = v end)
-addButton(trialSection, "TP On Top Great Tree", THEME.ACCENT, function()
+TabBlox:AddSection({Name = "Trial"})
+TabBlox:AddToggle({Title = "Auto Upgrade Race", Default = false, Callback = function(v) autoUpgradeRaceEnabled = v end})
+TabBlox:AddButton({Title = "TP On Top Great Tree", Callback = function()
     pcall(function()
         task.spawn(function()
             if char and char:FindFirstChild("HumanoidRootPart") then
@@ -814,7 +719,7 @@ addButton(trialSection, "TP On Top Great Tree", THEME.ACCENT, function()
                     for _, v in ipairs(characterParts) do v.CanCollide = false end
                     
                     local dist = (hrp.Position - treePos).Magnitude
-                    local speed = vals.islandTweenSpeed or 360
+                    local speed = islandTweenSpeed or 360
                     local moveDist = math.min(speed * dt, dist)
                     local direction = (treePos - hrp.Position).Unit
                     if direction.X == direction.X then 
@@ -826,9 +731,9 @@ addButton(trialSection, "TP On Top Great Tree", THEME.ACCENT, function()
             end
         end)
     end)
-end)
+end})
 
-addButton(trialSection, "TP to Ancient One", THEME.ACCENT, function()
+TabBlox:AddButton({Title = "TP to Ancient One", Callback = function()
     pcall(function()
         task.spawn(function()
             if char and char:FindFirstChild("HumanoidRootPart") then
@@ -842,7 +747,7 @@ addButton(trialSection, "TP to Ancient One", THEME.ACCENT, function()
                     for _, v in ipairs(characterParts) do v.CanCollide = false end
                     
                     local dist = (hrp.Position - targetPos).Magnitude
-                    local speed = vals.islandTweenSpeed or 360
+                    local speed = islandTweenSpeed or 360
                     local moveDist = math.min(speed * dt, dist)
                     local direction = (targetPos - hrp.Position).Unit
                     
@@ -855,9 +760,9 @@ addButton(trialSection, "TP to Ancient One", THEME.ACCENT, function()
             end
         end)
     end)
-end)
+end})
 
-addButton(trialSection, "TP to Clocks", THEME.ACCENT, function()
+TabBlox:AddButton({Title = "TP to Clocks", Callback = function()
     pcall(function()
         task.spawn(function()
             if char and char:FindFirstChild("HumanoidRootPart") then
@@ -884,45 +789,17 @@ addButton(trialSection, "TP to Clocks", THEME.ACCENT, function()
             end
         end)
     end)
-end)
+end})
 
-do -- SPECIAL FARM TAB
-    local bossFarmList = addCollapsible(TabSpecialFarm, "Auto Boss Config")
-    ui_controls.autoBoss = addToggle(bossFarmList, "Auto Boss", false, function(v) flags.autoBoss = v if not v then autoBossTargetObj = nil end end)
-    ui_controls.autoBossHop = addToggle(bossFarmList, "Auto Boss (Hop Server)", false, function(v) flags.autoBossHop = v end)
-    ui_controls.customBoss = addToggle(bossFarmList, "Custom Boss (Selection)", false, function(v) 
-        flags.customBoss = v 
-        if ui_controls.bossSelectFrame then ui_controls.bossSelectFrame.Visible = v end
-    end)
+-- SPECIAL FARM TAB (Boss)
+TabSpecialFarm:AddSection({Name = "Auto Boss Config"})
+TabSpecialFarm:AddToggle({Title = "Auto Boss", Default = false, Callback = function(v) autoBossEnabled = v if not v then autoBossTargetObj = nil end end})
+TabSpecialFarm:AddToggle({Title = "Auto Boss (Hop Server)", Default = false, Callback = function(v) autoBossHopEnabled = v end})
+TabSpecialFarm:AddToggle({Title = "Custom Boss (Selection)", Default = false, Callback = function(v) customBossEnabled = v end})
 
-    local bossSelectContainer = addCollapsible(bossFarmList, "Select Bosses")
-    ui_controls.bossSelectFrame = bossSelectContainer.Parent
-    ui_controls.bossSelectFrame.Visible = false
-
-    local function refreshBossList()
-        for _, child in ipairs(bossSelectContainer:GetChildren()) do
-            if not child:IsA("UIListLayout") then child:Destroy() end
-        end
-        local spawns = workspace:FindFirstChild("_WorldOrigin") and workspace._WorldOrigin:FindFirstChild("EnemySpawns")
-        if spawns then
-            for _, v in ipairs(spawns:GetChildren()) do
-                if v.Name:find("%[Boss%]") then
-                    local bName = v.Name
-                    if not selectedBosses[bName] then selectedBosses[bName] = false end
-                    addToggle(bossSelectContainer, bName, selectedBosses[bName], function(en)
-                        selectedBosses[bName] = en
-                    end)
-                end
-            end
-        end
-    end
-    refreshBossList()
-    addButton(bossFarmList, "Refresh Boss List", THEME.ACCENT, function() refreshBossList() end)
-
-    local katakuriConfig = addCollapsible(TabSpecialFarm, "Katakuri (Cake Prince) Farm")
-    ui_controls.autoCakeFarm = addToggle(katakuriConfig, "Auto Farm Katakuri", false, function(v) flags.autoCakeFarm = v if not v then autoCakeTargetObj = nil end end)
-    ui_controls.autoCakeSpawn = addToggle(katakuriConfig, "Auto Spawn Katakuri", false, function(v) flags.autoCakeSpawn = v end)
-end
+TabSpecialFarm:AddSection({Name = "Katakuri (Cake Prince) Farm"})
+TabSpecialFarm:AddToggle({Title = "Auto Farm Katakuri", Default = false, Callback = function(v) autoCakeFarmEnabled = v if not v then autoCakeTargetObj = nil end end})
+TabSpecialFarm:AddToggle({Title = "Auto Spawn Katakuri", Default = false, Callback = function(v) autoCakeSpawnEnabled = v end})
 
 local cache = { mirage = nil, kitsune = nil, prehistoric = nil, chest = nil, lastScan = 0, boatTarget = nil, boatParts = {}, touchedChests = {}, lastLootTime = 0, dState = "", dTick = 0, lastDeath = 0 }
 local function updateCharParts()
@@ -965,7 +842,7 @@ RunService.Heartbeat:Connect(function(dt)
 
     -- Per-Frame Smooth Logic (Lerp/Tween/Fly)
 
-    for name, enabled in pairs(islandFlags) do
+    for name, enabled in islandTweenEnabled do
         if enabled then
             local obj = (name == "Mirage Island" and cache.mirage) or (name == "Kitsune Island" and cache.kitsune) or (name == "Prehistoric Island" and cache.prehistoric)
             if obj then
@@ -976,7 +853,7 @@ RunService.Heartbeat:Connect(function(dt)
                     local target = posPart.Position + Vector3.new(0, 250, 0)
                     local dist = (hrp.Position - target).Magnitude
                     if dist > 5 then
-                        local alpha = math.min((vals.islandTweenSpeed * dt) / dist, 1)
+                        local alpha = math.min((islandTweenSpeed * dt) / dist, 1)
                         hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(hrp.Position, target) * CFrame.new(0, 0, -dist), alpha)
                     end
                 end
@@ -1019,15 +896,14 @@ RunService.Heartbeat:Connect(function(dt)
             local targetPos = miragePos + Vector3.new(0, 250, 0)
             if (hrp.Position - targetPos).Magnitude > 5 then
                 local alpha = math.min((islandTweenSpeed * dt) / (hrp.Position - targetPos).Magnitude, 1)
-                local alpha = math.min((vals.islandTweenSpeed * dt) / (hrp.Position - targetPos).Magnitude, 1)
                 hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(hrp.Position, targetPos) * CFrame.new(0, 0, -(hrp.Position - targetPos).Magnitude), alpha)
             end
         end
     end
 
-    if flags.flyBoat and currentBoat and currentBoat.Parent then
+    if flyBoatEnabled and currentBoat and currentBoat.Parent then
         local seat = currentBoat:FindFirstChildOfClass("VehicleSeat") or currentBoat:FindFirstChild("VehicleSeat", true)
-        local isPlayerOnBoat = (seat and seat.Occupant ~= nil)
+        isPlayerOnBoat = (seat and seat.Occupant ~= nil)
         if isPlayerOnBoat then
             if not cache.boatTarget then cache.boatTarget = hrp.Position end
             if #cache.boatParts == 0 then for _, v in ipairs(currentBoat:GetDescendants()) do if v:IsA("BasePart") then table.insert(cache.boatParts, v) end end end
@@ -1036,10 +912,10 @@ RunService.Heartbeat:Connect(function(dt)
             if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.CFrame.LookVector end
             if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.CFrame.RightVector end
             if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.CFrame.RightVector end
-            if moveDir.Magnitude > 0 then cache.boatTarget = cache.boatTarget + (moveDir.Unit * vals.flyBoatSpeed * dt) end
+            if moveDir.Magnitude > 0 then cache.boatTarget = cache.boatTarget + (moveDir.Unit * flyBoatSpeed * dt) end
             for _, v in ipairs(cache.boatParts) do v.Anchored, v.Velocity, v.RotVelocity = false, Vector3.zero, Vector3.zero end
-            if vals.flyBoatStyle == "Custom" then hrp.CFrame = CFrame.lookAt(cache.boatTarget, cache.boatTarget + cam.CFrame.LookVector)
-            else cache.boatTarget = Vector3.new(cache.boatTarget.X, vals.flyBoatHeight, cache.boatTarget.Z) hrp.CFrame = CFrame.new(cache.boatTarget) * CFrame.lookAt(Vector3.zero, Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z)).Rotation end
+            if flyBoatStyle == "Custom" then hrp.CFrame = CFrame.lookAt(cache.boatTarget, cache.boatTarget + cam.CFrame.LookVector)
+            else cache.boatTarget = Vector3.new(cache.boatTarget.X, flyBoatHeight, cache.boatTarget.Z) hrp.CFrame = CFrame.new(cache.boatTarget) * CFrame.lookAt(Vector3.zero, Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z)).Rotation end
         else
             cache.boatTarget = (currentBoat.PrimaryPart or currentBoat:FindFirstChildWhichIsA("BasePart")).Position
             for _, v in ipairs(cache.boatParts) do if not v.Anchored then v.Anchored = true end end
@@ -1047,14 +923,14 @@ RunService.Heartbeat:Connect(function(dt)
     end
 
     -- Combat & Movement
-    if flags.fastM1 then applyFastM1() end
-    if flags.tpEnabled and hum and hum.MoveDirection.Magnitude > 0 then
-        local extra = (vals.tpSpeed - 1) * hum.WalkSpeed
+    if fastM1Enabled then applyFastM1() end
+    if tpEnabled and hum and hum.MoveDirection.Magnitude > 0 then
+        local extra = (tpSpeed - 1) * hum.WalkSpeed
         if extra > 0 then hrp.CFrame = hrp.CFrame + (hum.MoveDirection * extra * dt) end
     end
     
-    if flags.waterWalk then
-        if flags.antiWater and hrp.Position.Y < vals.antiWaterThreshold then
+    if waterWalkEnabled then
+        if antiWaterEnabled and hrp.Position.Y < antiWaterThreshold then
             hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
             hrp.CFrame = CFrame.new(hrp.Position.X, 1, hrp.Position.Z)
         end
@@ -1067,15 +943,15 @@ RunService.Heartbeat:Connect(function(dt)
         lastFoamState = false
     end
     
-    if flags.infinityJump then char:SetAttribute("SkyjumpBoost", 3000) end
-    if vals.dashLength > 0 then char:SetAttribute("DashLength", vals.dashLength) end
+    if infinityJumpEnabled then char:SetAttribute("SkyjumpBoost", 3000) end
+    if dashLengthValue > 0 then char:SetAttribute("DashLength", dashLengthValue) end
     if hum then 
-        if flags.jumpHeight then hum.UseJumpPower, hum.JumpHeight = false, vals.jumpHeight
+        if jumpHeightEnabled then hum.UseJumpPower, hum.JumpHeight = false, jumpHeightValue
         else hum.UseJumpPower = true end
     end
 
     -- Auto Boss Tween (Real-time tracking)
-    if flags.autoBoss and autoBossTargetObj then
+    if autoBossEnabled and autoBossTargetObj then
         local tH = autoBossTargetObj:IsA("Model") and autoBossTargetObj:FindFirstChildOfClass("Humanoid")
         if tH and tH.Health <= 0 then autoBossTargetObj = nil return end
         
@@ -1083,7 +959,7 @@ RunService.Heartbeat:Connect(function(dt)
         if targetPart then
             for _, v in ipairs(characterParts) do v.CanCollide = false end
             hrp.Velocity = Vector3.new(0, 0, 0)
-            local targetPos = targetPart.Position + Vector3.new(0, vals.safeHeight, 0)
+            local targetPos = targetPart.Position + Vector3.new(0, safeHeight, 0)
             local dist = (hrp.Position - targetPos).Magnitude
             if dist > 0.5 then
                 local speed = (dist < 140) and 1300 or 360
@@ -1092,7 +968,7 @@ RunService.Heartbeat:Connect(function(dt)
                 if direction.X == direction.X then hrp.CFrame = hrp.CFrame + (direction * moveDist) end
             end
         end
-    elseif flags.autoFarmBones and autoBoneTargetObj then
+    elseif autoFarmBonesEnabled and autoBoneTargetObj then
         local tH = autoBoneTargetObj:IsA("Model") and autoBoneTargetObj:FindFirstChildOfClass("Humanoid")
         if tH and tH.Health <= 0 then autoBoneTargetObj = nil return end
         
@@ -1100,7 +976,7 @@ RunService.Heartbeat:Connect(function(dt)
         if targetPart then
             for _, v in ipairs(characterParts) do v.CanCollide = false end
             hrp.Velocity = Vector3.new(0, 0, 0)
-            local targetPos = targetPart.Position + Vector3.new(0, vals.safeHeight, 0)
+            local targetPos = targetPart.Position + Vector3.new(0, safeHeight, 0)
             local dist = (hrp.Position - targetPos).Magnitude
             if dist > 0.5 then
                 local speed = (dist < 140) and 1300 or 360
@@ -1109,7 +985,9 @@ RunService.Heartbeat:Connect(function(dt)
                 if direction.X == direction.X then hrp.CFrame = hrp.CFrame + (direction * moveDist) end
             end
         end
-    elseif flags.autoCakeFarm and autoCakeTargetObj then
+    end
+    
+    if autoCakeFarmEnabled and autoCakeTargetObj then
         local tH = autoCakeTargetObj:IsA("Model") and autoCakeTargetObj:FindFirstChildOfClass("Humanoid")
         if tH and tH.Health <= 0 then autoCakeTargetObj = nil return end
         
@@ -1117,7 +995,7 @@ RunService.Heartbeat:Connect(function(dt)
         if targetPart then
             for _, v in ipairs(characterParts) do v.CanCollide = false end
             hrp.Velocity = Vector3.new(0, 0, 0)
-            local targetPos = targetPart.Position + Vector3.new(0, vals.safeHeight, 0)
+            local targetPos = targetPart.Position + Vector3.new(0, safeHeight, 0)
             local dist = (hrp.Position - targetPos).Magnitude
             if dist > 0.5 then
                 local speed = (dist < 140) and 1300 or 360
@@ -1134,7 +1012,7 @@ end)
 task.spawn(function()
     while true do
         local dt = task.wait(0.1)
-        if flags.autoDungeon and char and char:FindFirstChild("HumanoidRootPart") then
+        if autoDungeonEnabled and char and char:FindFirstChild("HumanoidRootPart") then
             pcall(function()
                 local myHRP = char.HumanoidRootPart
                 local dungeonMap = workspace.Map:FindFirstChild("Dungeon")
@@ -1184,7 +1062,7 @@ task.spawn(function()
         end
 
         -- Logic Auto Boss Selector
-        if flags.autoBoss and char and char:FindFirstChild("HumanoidRootPart") then
+        if autoBossEnabled and char and char:FindFirstChild("HumanoidRootPart") then
             pcall(function()
                 local myHRP = char.HumanoidRootPart
                 local foundTarget = nil
@@ -1208,7 +1086,7 @@ task.spawn(function()
                     local cn = e.Name:gsub("%[.-%]", ""):match("^%s*(.-)%s*$")
                     local fullName = masterBossList[cn] or (e.Name:find("%[Boss%]") and e.Name)
                     if fullName then
-                        if not flags.customBoss or selectedBosses[fullName] then
+                        if not customBossEnabled or selectedBosses[fullName] then
                             local hum = e:FindFirstChildOfClass("Humanoid")
                             if hum and hum.Health > 0 then
                                 local d = (myHRP.Position - e.HumanoidRootPart.Position).Magnitude
@@ -1232,7 +1110,7 @@ task.spawn(function()
                     if spawns then
                         for _, s in ipairs(spawns:GetChildren()) do
                             if s.Name:find("%[Boss%]") then
-                                if not flags.customBoss or selectedBosses[s.Name] then
+                                if not customBossEnabled or selectedBosses[s.Name] then
                                     local d = (myHRP.Position - s.Position).Magnitude
                                     if d < minSpawnDist then
                                         minSpawnDist = d
@@ -1248,7 +1126,7 @@ task.spawn(function()
                         lastBossDeadTime = 0
                     else
                         autoBossTargetObj = nil
-                        if flags.autoBossHop then
+                        if autoBossHopEnabled then
                             if lastBossDeadTime == 0 then lastBossDeadTime = tick() end
                             if tick() - lastBossDeadTime > 5 then
                                 executeHop()
@@ -1261,7 +1139,7 @@ task.spawn(function()
         end
 
         -- Logic Auto Farm Bones Selector
-        if flags.autoFarmBones and char and char:FindFirstChild("HumanoidRootPart") then
+        if autoFarmBonesEnabled and char and char:FindFirstChild("HumanoidRootPart") then
             pcall(function()
                 local myHRP = char.HumanoidRootPart
                 local foundTarget = nil
@@ -1301,7 +1179,7 @@ task.spawn(function()
         else autoBoneTargetObj = nil end
 
         -- Logic Auto Cake Prince Selector
-        if flags.autoCakeFarm and char and char:FindFirstChild("HumanoidRootPart") then
+        if autoCakeFarmEnabled and char and char:FindFirstChild("HumanoidRootPart") then
             pcall(function()
                 local myHRP = char.HumanoidRootPart
                 local foundTarget = nil
@@ -1387,7 +1265,7 @@ task.spawn(function()
                             end)
                         end
                     end
-                    equip(vals.autoEquipType)
+                    equip(autoEquipType)
                 end
             end
         end
@@ -1401,27 +1279,22 @@ task.spawn(function()
     while true do
         task.wait(0.5)
         local root = char and char:FindFirstChild("HumanoidRootPart")
-        if root then vals.safeHeight = (root:FindFirstChild("Buddha") or root:FindFirstChild("Buddha2")) and 35 or 15 end
-        if flags.autoBuso and char then 
-            pcall(function() 
-                local rem = GetCommF()
-                if rem and not char:FindFirstChild("HasBuso") then rem:InvokeServer("Buso") end
-            end) 
-        end
+        if root then safeHeight = (root:FindFirstChild("Buddha") or root:FindFirstChild("Buddha2")) and 35 or 15 end
+        if autoBusoEnabled and char and not char:FindFirstChild("HasBuso") then pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("Buso") end) end
         for t, e in pairs(hitboxEnabled) do if e then expandHitbox(t) end end
         updateBoatSpeeds()
         updateIslandESP()
-        if vals.autoChestMirage or islandEspSettings.Enabled then
+        if autoChestMirage or islandEspSettings.Enabled then
             cache.mirage = findIsland("Mirage Island")
             cache.kitsune = findIsland("Kitsune Island")
             cache.prehistoric = findIsland("Prehistoric Island")
-            if vals.autoChestMirage and cache.mirage then
+            if autoChestMirage and cache.mirage then
                 local chestFolder = workspace:FindFirstChild("ChestModels")
                 if chestFolder then
                     for _, chest in ipairs(chestFolder:GetChildren()) do
                         if not cache.touchedChests[chest] then
                             local n = chest.Name:lower()
-                            if (vals.autoChestType == "All") or (vals.autoChestType == "Fragment" and n:find("fragment")) or (vals.autoChestType == "Mirage" and n:find("mirage")) then
+                            if (autoChestType == "All") or (autoChestType == "Fragment" and n:find("fragment")) or (autoChestType == "Mirage" and n:find("mirage")) then
                                 local p = chest:FindFirstChildWhichIsA("BasePart") or chest.PrimaryPart
                                 if p then cache.chest = p; break end
                             end
@@ -1438,7 +1311,7 @@ end)
 task.spawn(function()
     while true do
         task.wait(1)
-        if flags.autoCakeSpawn then
+        if autoCakeSpawnEnabled then
             pcall(function()
                 ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("CakePrinceSpawner", true)
                 task.wait(0.1)
@@ -1448,170 +1321,142 @@ task.spawn(function()
     end
 end)
 
-do -- LOCAL PLAYER TAB
-    local lpList = addCollapsible(TabBlox, "LocalPlayer")
-    addToggle(lpList, "Infinity Sky Jump", false, function(v) flags.infinityJump = v if not v and char then char:SetAttribute("SkyjumpBoost", nil) end end)
-    addToggle(lpList, "Jump Height Enabled", false, function(v) flags.jumpHeight = v end)
-    addSlider(lpList, "Jump Height", 7.2, 1000, 7.2, 1, function(v) vals.jumpHeight = v end)
-    addSlider(lpList, "Dash Length", 0, 500, 0, 1, function(v) vals.dashLength = v end)
-    ui_controls.waterWalk = addToggle(lpList, "Water Walk", true, function(v) flags.waterWalk = v end)
-    ui_controls.antiWater = addToggle(lpList, "Anti Water", true, function(v) flags.antiWater = v end)
-end
+-- LocalPlayer Section
+TabBlox:AddSection({Name = "LocalPlayer"})
+TabBlox:AddToggle({Title = "Infinity Sky Jump", Default = false, Callback = function(v) infinityJumpEnabled = v if not v and char then char:SetAttribute("SkyjumpBoost", nil) end end})
+TabBlox:AddToggle({Title = "Jump Height Enabled", Default = false, Callback = function(v) jumpHeightEnabled = v end})
+TabBlox:AddSlider({Title = "Jump Height", Min = 7.2, Max = 1000, Default = 7.2, Increase = 0.1, Callback = function(v) jumpHeightValue = v end})
+TabBlox:AddSlider({Title = "Dash Length", Min = 0, Max = 500, Default = 0, Increase = 0.1, Callback = function(v) dashLengthValue = v end})
+TabBlox:AddToggle({Title = "Water Walk", Default = true, Callback = function(v) waterWalkEnabled = v end})
+TabBlox:AddToggle({Title = "Anti Water", Default = true, Callback = function(v) antiWaterEnabled = v end})
 
-do -- FRUIT TAB
-    local fruitSection = addCollapsible(TabBlox, "Fruit")
-    ui_controls.autoStoreFruit = addToggle(fruitSection, "Auto Store Fruit", false, function(v) flags.autoStoreFruit = v end)
-    addButton(fruitSection, "Store All Fruits (1 Click)", THEME.ACCENT, function() storeAllFruits() end)
-    ui_controls.autoRandomFruit = addToggle(fruitSection, "Auto Random Fruit", false, function(v) flags.autoRandomFruit = v end)
-    addButton(fruitSection, "Random Fruit (1 Click)", THEME.ACCENT, function() 
-        pcall(function() 
-            local rem = GetCommF()
-            if rem then rem:InvokeServer("Cousin", "Buy", "DLCBoxData") end
-        end) 
-    end)
+-- Fruit Section
+TabBlox:AddSection({Name = "Fruit"})
+local function storeAllFruits()
+    if not char then return end
+    local items = {}
+    for _, v in player.Backpack:GetChildren() do table.insert(items, v) end
+    for _, v in char:GetChildren() do table.insert(items, v) end
+    for _, item in items do
+        if item:IsA("Tool") and item.Name:lower():find("fruit") then
+            local baseName = item.Name:gsub(" Fruit", ""):gsub(" ", "")
+            local formattedName = baseName .. "-" .. baseName
+            pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("StoreFruit", formattedName, item) end)
+        end
+    end
 end
+TabBlox:AddToggle({Title = "Auto Store Fruit", Default = false, Callback = function(v) autoStoreFruitEnabled = v end})
+TabBlox:AddButton({Title = "Store All Fruits (1 Click)", Callback = function() storeAllFruits() end})
+TabBlox:AddToggle({Title = "Auto Random Fruit", Default = false, Callback = function(v) autoRandomFruitEnabled = v end})
+TabBlox:AddButton({Title = "Random Fruit (1 Click)", Callback = function() pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("Cousin", "Buy", "DLCBoxData") end) end})
 
-do -- SEA EVENT TAB
-    local seaEventList = addCollapsible(TabBlox, "Sea Event")
-    local boatStatusF = Instance.new("Frame", seaEventList)
-    boatStatusF.Size = UDim2.new(1, 0, 0, 25) boatStatusF.BackgroundTransparency = 1
-    local boatStatusLabel = Instance.new("TextLabel", boatStatusF) -- Localize within do block
-    boatStatusLabel.Size, boatStatusLabel.BackgroundTransparency = UDim2.new(1,0,1,0), 1
-    boatStatusLabel.Text = "🔍 Quét thuyền..." boatStatusLabel.TextColor3 = THEME.TEXT_DIM boatStatusLabel.Font = Enum.Font.Gotham boatStatusLabel.TextSize = 12
-    
-    ui_controls.boatSpeed = addSlider(seaEventList, "Boat Speed", 200, 600, 200, 0, function(v) boatSpeed = v updateBoatSpeeds() end)
-    addButton(seaEventList, "Buy Marine Boat", THEME.ACCENT, function() pcall(function() if char and char:FindFirstChild("HumanoidRootPart") then char.HumanoidRootPart.CFrame = CFrame.new(-16919, 9, 503) task.wait(0.1) ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("BuyBoat", "MarineGrandBrigade") end end) end)
-    
-    addButton(seaEventList, "TP Boat to Player", THEME.ACCENT, function()
-        pcall(function()
-            local boats = workspace:FindFirstChild("Boats")
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            if boats and hrp then
-                for _, boat in boats:GetChildren() do
-                    if boat:FindFirstChild("Owner") and tostring(boat.Owner.Value) == player.Name then
-                        local originalPos = hrp.CFrame
-                        local seat = boat:FindFirstChildOfClass("VehicleSeat") or boat:FindFirstChild("VehicleSeat", true)
-                        if seat then
-                            hrp.CFrame = seat.CFrame + Vector3.new(0, 3, 0)
-                            task.wait(0.2)
-                            hrp.CFrame = originalPos
-                            task.wait(0.1)
-                            if flags.flyBoat then cache.boatTarget = hrp.Position end
-                        end
-                        break
-                    end
-                end
-            end
-        end)
-    end)
-    
-    ui_controls.flyboat = addToggle(seaEventList, "flyboat", false, function(v)
-        flags.flyBoat = v
-        if v then
-            local boats = workspace:FindFirstChild("Boats")
-            if not boats or not char or not char:FindFirstChild("HumanoidRootPart") then flags.flyBoat = false if ui_controls.flyboat then ui_controls.flyboat.Set(false) end return end
-            local hrp, closest, dist = char.HumanoidRootPart, nil, 200
+-- Sea Event Section
+TabBlox:AddSection({Name = "Sea Event"})
+TabBlox:AddSlider({Title = "Boat Speed", Min = 200, Max = 600, Default = 200, Increase = 1, Callback = function(v) boatSpeed = v updateBoatSpeeds() end})
+TabBlox:AddButton({Title = "Buy Marine Boat", Callback = function() pcall(function() if char and char:FindFirstChild("HumanoidRootPart") then char.HumanoidRootPart.CFrame = CFrame.new(-16919, 9, 503) task.wait(0.1) ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("BuyBoat", "MarineGrandBrigade") end end) end})
+TabBlox:AddButton({Title = "TP Boat to Player", Callback = function()
+    pcall(function()
+        local boats = workspace:FindFirstChild("Boats")
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if boats and hrp then
             for _, boat in boats:GetChildren() do
-                if boat:IsA("Model") then
-                    local part = boat.PrimaryPart or boat:FindFirstChildWhichIsA("BasePart")
-                    if part then local d = (part.Position - hrp.Position).Magnitude if d < dist then dist = d; closest = boat end end
+                if boat:FindFirstChild("Owner") and tostring(boat.Owner.Value) == player.Name then
+                    local originalPos = hrp.CFrame
+                    local seat = boat:FindFirstChildOfClass("VehicleSeat") or boat:FindFirstChild("VehicleSeat", true)
+                    if seat then
+                        hrp.CFrame = seat.CFrame + Vector3.new(0, 3, 0)
+                        task.wait(0.2)
+                        hrp.CFrame = originalPos
+                        task.wait(0.1)
+                        if flyBoatEnabled then cache.boatTarget = hrp.Position end
+                    end
+                    break
                 end
             end
-            if closest then 
-                currentBoat = closest
-                local part = currentBoat.PrimaryPart or currentBoat:FindFirstChildWhichIsA("BasePart")
-                cache.boatTarget = part.Position
-            else flags.flyBoat = false if ui_controls.flyboat then ui_controls.flyboat.Set(false) end end
-        else currentBoat, cache.boatTarget = nil, nil end
-    end)
-    
-    ui_controls.flyboatSpeed = addSlider(seaEventList, "speed flyboat", 100, 1000, 200, 0, function(v) vals.flyBoatSpeed = v end)
-    ui_controls.flyboatHeight = addSlider(seaEventList, "boat height", 20, 600, 125, 0, function(v) vals.flyBoatHeight = v end)
-    ui_controls.flyboatStyle = addDropdown(seaEventList, "Fly Style", {"Default", "Custom"}, "Default", function(v) flyBoatStyle = v end)
-    
-    addButton(seaEventList, "Remove Rocks", THEME.ACCENT, function()
-        pcall(function()
-            for _, v in ipairs(workspace:GetDescendants()) do
-                if v.Name == "Rocks" then pcall(function() v:Destroy() end) end
-            end
-        end)
-    end)
-end
-
-local shopList = addCollapsible(TabBlox, "Shop")
-addButton(shopList, "Reset Stat (Buy)", THEME.ACCENT, function()
-    pcall(function() ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("BlackbeardReward", "Refund", "2") end)
-end)
-
-do -- UTILS TAB
-    addSection(TabUtils, "Movement")
-    local tpWalkList = addCollapsible(TabUtils, "TP Walk")
-    ui_controls.tpEnabled = addToggle(tpWalkList, "Enabled", false, function(v) flags.tpEnabled = v end)
-    ui_controls.tpSpeed = addSlider(tpWalkList, "Speed Mult", 1, 8, 2, 1, function(v) vals.tpSpeed = v end)
-    
-    addSection(TabUtils, "Visuals")
-    local espList = addCollapsible(TabUtils, "Player ESP")
-    ui_controls.espEnabled = addToggle(espList, "Enabled", false, function(v) espSettings.Enabled = v if not v then clearESP() end end)
-    ui_controls.espText = addToggle(espList, "Show HP Text", true, function(v) espSettings.ShowText = v end)
-    ui_controls.espBar = addToggle(espList, "Show HP Bar", true, function(v) espSettings.ShowBar = v end)
-    
-    addSection(TabUtils, "Others")
-    ui_controls.antiAfk = addToggle(TabUtils, "Anti-AFK", true, function(v) flags.antiAfk = v end)
-    addButton(TabUtils, "Remove Fog & Effects", THEME.ACCENT, function()
-        for _, v in Lighting:GetChildren() do if v:IsA("Atmosphere") or v.Name:find("Fog") then pcall(function() v:Destroy() end) end end
-        Lighting.FogEnd, Lighting.FogStart, Lighting.GlobalShadows, Lighting.ExposureCompensation = 9e9, 0, false, 1
-    end)
-    addButton(TabUtils, "Infinite Yield", THEME.ACCENT, function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))() end)
-end
-
-addSection(TabUtils, "Server Hopper")
-local hopFrame = Instance.new("Frame", TabUtils)
-hopFrame.Size, hopFrame.BackgroundTransparency = UDim2.new(1, 0, 0, 25), 1
-hopStatusLabel = Instance.new("TextLabel", hopFrame)
-hopStatusLabel.Size, hopStatusLabel.BackgroundTransparency = UDim2.new(1, 0, 1, 0), 1
-hopStatusLabel.Text, hopStatusLabel.TextColor3, hopStatusLabel.Font, hopStatusLabel.TextSize = "Bấm để săn server vắng nhất", THEME.TEXT_DIM, Enum.Font.Gotham, 12
-
-addButton(TabUtils, "Small Server Hop", THEME.ACCENT, function() executeHop() end)
-addButton(TabUtils, "Old-like (Low Population)", THEME.DARK_ITEM, function() hopToOldServer("4h") end)
-addButton(TabUtils, "Old-like (Fast Scan)", THEME.DARK_ITEM, function() hopToOldServer("3h45") end)
-
-do -- SETTINGS & DUNGEON
-    local dungeonSection = addCollapsible(TabBlox, "Dungeon") -- Back to Blox Fruit tab
-    ui_controls.autoDungeon = addToggle(dungeonSection, "Auto Dungeon", false, function(v) flags.autoDungeon = v end)
-
-    local customIconList = addCollapsible(TabSettings, "Custom Button Icon")
-    local helpLabel = Instance.new("TextLabel", customIconList)
-    helpLabel.Size, helpLabel.BackgroundTransparency = UDim2.new(1,0,0,80), 1
-    helpLabel.Text = "📖 Hướng dẫn lấy ID:\n1. Mở Roblox Website > Create > Dashboard\n2. Chọn Development Items > Decals\n3. Copy dãy số (ID) của ảnh bạn muốn dán vào đây."
-    helpLabel.TextColor3, helpLabel.Font, helpLabel.TextSize, helpLabel.TextWrapped = THEME.TEXT_DIM, Enum.Font.Gotham, 11, true
-
-    addInput(customIconList, "Icon Button ID", "84053545044369", "Dán ID số vào đây...", function(v)
-        local idOnly = v:match("%d+")
-        if idOnly then
-            ToggleBtn.Image = "rbxthumb://type=Asset&id=" .. idOnly .. "&w=420&h=420"
         end
     end)
-end
+end})
+TabBlox:AddToggle({Title = "Fly Boat", Default = false, Callback = function(v)
+    flyBoatEnabled = v
+    if v then
+        local boats = workspace:FindFirstChild("Boats")
+        if not boats or not char or not char:FindFirstChild("HumanoidRootPart") then flyBoatEnabled = false return end
+        local hrp, closest, dist = char.HumanoidRootPart, nil, 200
+        for _, boat in boats:GetChildren() do
+            if boat:IsA("Model") then
+                local part = boat.PrimaryPart or boat:FindFirstChildWhichIsA("BasePart")
+                if part then local d = (part.Position - hrp.Position).Magnitude if d < dist then dist = d; closest = boat end end
+            end
+        end
+        if closest then 
+            currentBoat = closest
+            local part = currentBoat.PrimaryPart or currentBoat:FindFirstChildWhichIsA("BasePart")
+            cache.boatTarget = part.Position
+        else flyBoatEnabled = false end
+    else currentBoat, cache.boatTarget = nil, nil end
+end})
+TabBlox:AddSlider({Title = "Speed Flyboat", Min = 100, Max = 1000, Default = 200, Increase = 1, Callback = function(v) flyBoatSpeed = v end})
+TabBlox:AddSlider({Title = "Boat Height", Min = 20, Max = 600, Default = 125, Increase = 1, Callback = function(v) flyBoatHeight = v end})
+TabBlox:AddDropdown({Title = "Fly Style", Options = {"Default", "Custom"}, Default = "Default", Callback = function(v) flyBoatStyle = v end})
+TabBlox:AddButton({Title = "Remove Rocks", Callback = function()
+    pcall(function()
+        for _, v in ipairs(workspace:GetDescendants()) do
+            if v.Name == "Rocks" then pcall(function() v:Destroy() end) end
+        end
+    end)
+end})
+
+-- Shop Section
+TabBlox:AddSection({Name = "Shop"})
+TabBlox:AddButton({Title = "Reset Stat (Buy)", Callback = function()
+    pcall(function() ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("BlackbeardReward", "Refund", "2") end)
+end})
+
+-- Dungeon Section
+TabBlox:AddSection({Name = "Dungeon"})
+TabBlox:AddToggle({Title = "Auto Dungeon", Default = false, Callback = function(v) autoDungeonEnabled = v end})
+
+-- UTILS TAB
+TabUtils:AddSection({Name = "Movement"})
+TabUtils:AddToggle({Title = "TP Walk Enabled", Default = false, Callback = function(v) tpEnabled = v end})
+TabUtils:AddSlider({Title = "Speed Mult", Min = 1, Max = 8, Default = 2, Increase = 0.1, Callback = function(v) tpSpeed = v end})
+
+TabUtils:AddSection({Name = "Visuals"})
+TabUtils:AddToggle({Title = "Player ESP", Default = false, Callback = function(v) espSettings.Enabled = v if not v then clearESP() end end})
+TabUtils:AddToggle({Title = "Show HP Text", Default = true, Callback = function(v) espSettings.ShowText = v end})
+TabUtils:AddToggle({Title = "Show HP Bar", Default = true, Callback = function(v) espSettings.ShowBar = v end})
+
+TabUtils:AddSection({Name = "Others"})
+TabUtils:AddToggle({Title = "Anti-AFK", Default = true, Callback = function(v) antiAfkEnabled = v end})
+TabUtils:AddButton({Title = "Remove Fog & Effects", Callback = function()
+    for _, v in Lighting:GetChildren() do if v:IsA("Atmosphere") or v.Name:find("Fog") then pcall(function() v:Destroy() end) end end
+    Lighting.FogEnd, Lighting.FogStart, Lighting.GlobalShadows, Lighting.ExposureCompensation = 9e9, 0, false, 1
+end})
+TabUtils:AddButton({Title = "Infinite Yield", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))() end})
+
+TabUtils:AddSection({Name = "Server Hopper"})
+TabUtils:AddButton({Title = "Small Server Hop", Callback = function() executeHop() end})
+TabUtils:AddButton({Title = "Old-like (Low Population)", Callback = function() hopToOldServer("4h") end})
+TabUtils:AddButton({Title = "Old-like (Fast Scan)", Callback = function() hopToOldServer("3h45") end})
+
+TabSettings:AddSection({Name = "Custom Button Icon"})
+TabSettings:AddParagraph({Title = "Hướng dẫn", Text = "📖 Hướng dẫn lấy ID:\n1. Mở Roblox Website > Create > Dashboard\n2. Chọn Development Items > Decals\n3. Copy dãy số (ID) của ảnh bạn muốn dán vào đây."})
+TabSettings:AddTextBox({Title = "Icon Button ID", Default = "84053545044369", PlaceholderText = "Dán ID số vào đây...", Callback = function(v)
+    local idOnly = v:match("%d+")
+    if idOnly then
+        pcall(function() ToggleBtn.Image = "rbxthumb://type=Asset&id=" .. idOnly .. "&w=420&h=420" end)
+    end
+end})
 
 local last10s, last2s = 0, 0
 task.spawn(function()
     while true do
         task.wait(1)
         local now = tick()
-        if flags.autoRaceV3 then 
-            pcall(function() 
-                local rem = GetCommE()
-                if rem then rem:FireServer("ActivateAbility") end
-            end) 
-        end
-        if flags.autoStoreFruit then storeAllFruits() end
-        if flags.autoUpgradeRace then 
-            pcall(function() 
-                local rem = GetCommF()
-                if rem then rem:InvokeServer("UpgradeRace", "Buy") end
-            end) 
-        end
-        if flags.autoActiveV4 then
+        if autoRaceV3Enabled then pcall(function() ReplicatedStorage.Remotes.CommE:FireServer("ActivateAbility") end) end
+        if autoStoreFruitEnabled then storeAllFruits() end
+        if autoUpgradeRaceEnabled then pcall(function() ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("UpgradeRace", "Buy") end) end
+        if autoActiveV4Enabled then
             pcall(function()
                 local character = player.Character
                 if character then
@@ -1623,26 +1468,20 @@ task.spawn(function()
                 end
             end)
         end
-        if flags.autoTradeBones and now - last2s >= 2 then
+        if autoTradeBonesEnabled and now - last2s >= 2 then
             last2s = now
-            pcall(function() 
-                local rem = GetCommF()
-                if rem then rem:InvokeServer("Bones", "Buy", 1, 1) end
-            end)
+            pcall(function() ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"):InvokeServer("Bones", "Buy", 1, 1) end)
         end
-        if flags.autoRandomFruit and now - last10s >= 10 then
+        if autoRandomFruitEnabled and now - last10s >= 10 then
             last10s = now
-            pcall(function() 
-                local rem = GetCommF()
-                if rem then rem:InvokeServer("Cousin", "Buy", "DLCBoxData") end
-            end)
+            pcall(function() ReplicatedStorage.Remotes.CommF_:InvokeServer("Cousin", "Buy", "DLCBoxData") end)
         end
         if now % 1200 < 1 then hoppedServers = {} end
     end
 end)
 
 player.Idled:Connect(function()
-    if flags.antiAfk then
+    if antiAfkEnabled then
         pcall(function()
             VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
             task.wait(1)
@@ -1651,12 +1490,4 @@ player.Idled:Connect(function()
     end
 end)
 
-
-if #tabBtns > 0 then
-    for _, p in pages do p.Visible = false end
-    for _, b in tabBtns do b.BackgroundTransparency = 1; b.TextColor3 = THEME.TEXT_DIM end
-    pages[1].Visible = true
-    tabBtns[1].BackgroundTransparency = 0
-    tabBtns[1].TextColor3 = THEME.ACCENT
-end
-
+Window:SelectTab(1)
