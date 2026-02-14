@@ -19,21 +19,25 @@ Lib.THEME = {
 }
 
 local function corner(p, r) 
-    local c = Instance.new("UICorner", p) 
+    local c = Instance.new("UICorner") 
     c.CornerRadius = UDim.new(0, r or 8) 
+    c.Parent = p
     return c 
 end
 
 local function stroke(p, c, t, b) 
-    local s = Instance.new("UIStroke", p) 
+    local s = Instance.new("UIStroke") 
     s.Color = c or (Lib.THEME.ACCENT) 
     s.Thickness = t or 1 
     s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border 
+    s.Parent = p
     return s 
 end
 
 local function tween(o, p, d) 
-    TweenService:Create(o, TweenInfo.new(d or 0.3, Enum.EasingStyle.Quart), p):Play() 
+    local t = TweenService:Create(o, TweenInfo.new(d or 0.3, Enum.EasingStyle.Quart), p)
+    t:Play() 
+    return t
 end
 
 local function makeDraggable(o)
@@ -60,13 +64,15 @@ local function makeDraggable(o)
 end
 
 function Lib:CreateWindow(title, author, iconId)
-    local ScreenGui = Instance.new("ScreenGui", CoreGui)
+    local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "HB_PRO_V" .. math.random(100, 999)
     ScreenGui.ResetOnSpawn = false
+    ScreenGui.Parent = CoreGui
     
     local guiVisible = true
     
-    local ToggleBtn = Instance.new("ImageButton", ScreenGui)
+    local ToggleBtn = Instance.new("ImageButton")
+    ToggleBtn.Name = "ToggleButton"
     ToggleBtn.Size = UDim2.new(0, 60, 0, 60)
     ToggleBtn.Position = UDim2.new(0.02, 0, 0.5, -30)
     ToggleBtn.BackgroundColor3 = Lib.THEME.BG_SIDE
@@ -74,20 +80,23 @@ function Lib:CreateWindow(title, author, iconId)
     ToggleBtn.Image = "rbxthumb://type=Asset&id=" .. (iconId or "84053545044369") .. "&w=420&h=420"
     ToggleBtn.ScaleType = Enum.ScaleType.Fit
     ToggleBtn.ZIndex = 15
+    ToggleBtn.Parent = ScreenGui
     corner(ToggleBtn, 12)
-    stroke(ToggleBtn, Lib.THEME.ACCENT, 2, true)
+    stroke(ToggleBtn, Lib.THEME.ACCENT, 2)
     makeDraggable(ToggleBtn)
     
-    local MainFrame = Instance.new("Frame", ScreenGui)
+    local MainFrame = Instance.new("Frame")
     MainFrame.Name = "MainFrame"
     MainFrame.Size = UDim2.new(0, 540, 0, 340)
     MainFrame.Position = UDim2.new(0.5, -270, 0.5, -170)
     MainFrame.BackgroundColor3 = Lib.THEME.BG_MAIN
-    MainFrame.BackgroundTransparency = 0.3
+    MainFrame.BackgroundTransparency = 0.1 -- Increased opacity
     MainFrame.BorderSizePixel = 0
     MainFrame.ClipsDescendants = true
+    MainFrame.Visible = true
+    MainFrame.Parent = ScreenGui
     corner(MainFrame, 12)
-    stroke(MainFrame, Lib.THEME.ACCENT, 2, false)
+    stroke(MainFrame, Lib.THEME.ACCENT, 2)
     makeDraggable(MainFrame)
     
     ToggleBtn.MouseButton1Click:Connect(function() 
@@ -96,14 +105,16 @@ function Lib:CreateWindow(title, author, iconId)
         tween(ToggleBtn, {BackgroundTransparency = guiVisible and 0.3 or 0.2}, 0.2) 
     end)
     
-    local Sidebar = Instance.new("Frame", MainFrame)
+    local Sidebar = Instance.new("Frame")
+    Sidebar.Name = "Sidebar"
     Sidebar.Size = UDim2.new(0, 110, 1, 0)
     Sidebar.BackgroundColor3 = Lib.THEME.BG_SIDE
-    Sidebar.BackgroundTransparency = 0.4
+    Sidebar.BackgroundTransparency = 0.2
     Sidebar.BorderSizePixel = 0
+    Sidebar.Parent = MainFrame
     corner(Sidebar, 12)
     
-    local SidebarLabel = Instance.new("TextLabel", Sidebar)
+    local SidebarLabel = Instance.new("TextLabel")
     SidebarLabel.Size = UDim2.new(1, 0, 0, 35)
     SidebarLabel.Position = UDim2.new(0, 0, 0, 5)
     SidebarLabel.BackgroundTransparency = 1
@@ -111,8 +122,9 @@ function Lib:CreateWindow(title, author, iconId)
     SidebarLabel.TextColor3 = Lib.THEME.ACCENT
     SidebarLabel.Font = Enum.Font.GothamBold
     SidebarLabel.TextSize = 22
+    SidebarLabel.Parent = Sidebar
     
-    local AuthorLabel = Instance.new("TextLabel", Sidebar)
+    local AuthorLabel = Instance.new("TextLabel")
     AuthorLabel.Size = UDim2.new(1, 0, 0, 20)
     AuthorLabel.Position = UDim2.new(0, 0, 0, 35)
     AuthorLabel.BackgroundTransparency = 1
@@ -120,19 +132,25 @@ function Lib:CreateWindow(title, author, iconId)
     AuthorLabel.TextColor3 = Lib.THEME.TEXT_DIM
     AuthorLabel.Font = Enum.Font.GothamMedium
     AuthorLabel.TextSize = 10
+    AuthorLabel.Parent = Sidebar
     
-    local TabContainer = Instance.new("Frame", Sidebar)
+    local TabContainer = Instance.new("Frame")
     TabContainer.Size = UDim2.new(1, 0, 1, -70)
     TabContainer.Position = UDim2.new(0, 0, 0, 70)
     TabContainer.BackgroundTransparency = 1
-    local TabLayout = Instance.new("UIListLayout", TabContainer)
+    TabContainer.Parent = Sidebar
+    local TabLayout = Instance.new("UIListLayout")
     TabLayout.Padding = UDim.new(0, 6)
     TabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    TabLayout.Parent = TabContainer
     
-    local ContentArea = Instance.new("Frame", MainFrame)
+    local ContentArea = Instance.new("Frame")
+    ContentArea.Name = "ContentArea"
     ContentArea.Size = UDim2.new(1, -125, 1, -15)
     ContentArea.Position = UDim2.new(0, 120, 0, 10)
     ContentArea.BackgroundTransparency = 1
+    ContentArea.ClipsDescendants = false -- Ensure items aren't clipped by the container
+    ContentArea.Parent = MainFrame
     
     local pages = {}
     local tabBtns = {}
@@ -141,10 +159,13 @@ function Lib:CreateWindow(title, author, iconId)
     
     local function addCommonMethods(Target, ParentScroll)
         function Target:AddSection(title)
-            local f = Instance.new("Frame", ParentScroll)
+            local f = Instance.new("Frame")
+            f.Name = "Section_" .. title
             f.Size = UDim2.new(1, 0, 0, 26)
             f.BackgroundTransparency = 1
-            local label = Instance.new("TextLabel", f)
+            f.Parent = ParentScroll
+            
+            local label = Instance.new("TextLabel")
             label.Size = UDim2.new(1, 0, 1, -4)
             label.Position = UDim2.new(0, 4, 0, 0)
             label.BackgroundTransparency = 1
@@ -153,17 +174,20 @@ function Lib:CreateWindow(title, author, iconId)
             label.Font = Enum.Font.GothamBold
             label.TextSize = 10
             label.TextXAlignment = Enum.TextXAlignment.Left
-            local line = Instance.new("Frame", f)
+            label.Parent = f
+            
+            local line = Instance.new("Frame")
             line.Size = UDim2.new(1, 0, 0, 1)
             line.Position = UDim2.new(0, 0, 1, -2)
             line.BackgroundColor3 = Lib.THEME.ACCENT
             line.BackgroundTransparency = 0.5
             line.BorderSizePixel = 0
+            line.Parent = f
             return f
         end
         
         function Target:AddLabel(text, size)
-            local l = Instance.new("TextLabel", ParentScroll)
+            local l = Instance.new("TextLabel")
             l.Size = UDim2.new(1, 0, 0, size or 20)
             l.BackgroundTransparency = 1
             l.Text = text
@@ -172,18 +196,20 @@ function Lib:CreateWindow(title, author, iconId)
             l.TextSize = 12
             l.TextXAlignment = Enum.TextXAlignment.Left
             l.TextWrapped = true
+            l.Parent = ParentScroll
             return l
         end
 
         function Target:AddToggle(t, d, c)
-            local f = Instance.new("Frame", ParentScroll)
+            local f = Instance.new("Frame")
             f.Size = UDim2.new(1, 0, 0, 30)
             f.BackgroundColor3 = Lib.THEME.BG_CONTENT
             f.BackgroundTransparency = 0.4
+            f.Parent = ParentScroll
             corner(f, 6)
             stroke(f, Lib.THEME.ACCENT)
             
-            local l = Instance.new("TextLabel", f)
+            local l = Instance.new("TextLabel")
             l.Size = UDim2.new(1, -50, 1, 0)
             l.Position = UDim2.new(0, 10, 0, 0)
             l.BackgroundTransparency = 1
@@ -192,47 +218,54 @@ function Lib:CreateWindow(title, author, iconId)
             l.Font = Enum.Font.Gotham
             l.TextSize = 11
             l.TextXAlignment = Enum.TextXAlignment.Left
+            l.Parent = f
             
-            local btn = Instance.new("TextButton", f)
+            local btn = Instance.new("TextButton")
             btn.Size = UDim2.new(0, 30, 0, 16)
             btn.Position = UDim2.new(1, -40, 0.5, -8)
             btn.BackgroundColor3 = d and Lib.THEME.ACCENT or Color3.fromRGB(200, 200, 200)
             btn.Text = ""
+            btn.Parent = f
             corner(btn, 8)
             stroke(btn, Lib.THEME.ACCENT)
             
-            local o = Instance.new("Frame", btn)
+            local o = Instance.new("Frame")
             o.Size = UDim2.new(0, 12, 0, 12)
             o.Position = UDim2.new(d and 1 or 0, d and -14 or 2, 0.5, -6)
             o.BackgroundColor3 = Color3.new(1, 1, 1)
+            o.Parent = btn
             corner(o, 6)
             
-            local en = d
+            local state = d
+            local function update()
+                tween(btn, {BackgroundColor3 = state and Lib.THEME.ACCENT or Color3.fromRGB(200, 200, 200)}, 0.2) 
+                tween(o, {Position = UDim2.new(state and 1 or 0, state and -14 or 2, 0.5, -6)}, 0.2) 
+            end
+
             btn.MouseButton1Click:Connect(function() 
-                en = not en 
-                tween(btn, {BackgroundColor3 = en and Lib.THEME.ACCENT or Color3.fromRGB(200, 200, 200)}, 0.2) 
-                tween(o, {Position = UDim2.new(en and 1 or 0, en and -14 or 2, 0.5, -6)}, 0.2) 
-                c(en) 
+                state = not state 
+                update()
+                c(state) 
             end)
             
-            local ToggleObj = {}
+            local ToggleObj = {Instance = f}
             function ToggleObj:Set(v)
-                en = v 
-                btn.BackgroundColor3 = en and Lib.THEME.ACCENT or Color3.fromRGB(200, 200, 200) 
-                o.Position = UDim2.new(en and 1 or 0, en and -14 or 2, 0.5, -6) 
+                state = v 
+                update()
             end
             return ToggleObj
         end
         
         function Target:AddSlider(t, min, max, d, dec, c)
-            local f = Instance.new("Frame", ParentScroll)
+            local f = Instance.new("Frame")
             f.Size = UDim2.new(1, 0, 0, 42)
             f.BackgroundColor3 = Lib.THEME.BG_CONTENT
             f.BackgroundTransparency = 0.4
+            f.Parent = ParentScroll
             corner(f, 6)
             stroke(f, Lib.THEME.ACCENT)
             
-            local l = Instance.new("TextLabel", f)
+            local l = Instance.new("TextLabel")
             l.Size = UDim2.new(1, -20, 0, 20)
             l.Position = UDim2.new(0, 10, 0, 4)
             l.BackgroundTransparency = 1
@@ -241,37 +274,43 @@ function Lib:CreateWindow(title, author, iconId)
             l.Font = Enum.Font.Gotham
             l.TextSize = 11
             l.TextXAlignment = Enum.TextXAlignment.Left
+            l.Parent = f
             
-            local bg = Instance.new("Frame", f)
+            local bg = Instance.new("Frame")
             bg.Size = UDim2.new(1, -20, 0, 3)
             bg.Position = UDim2.new(0, 10, 0, 30)
             bg.BackgroundColor3 = Color3.new(0, 0, 0)
+            bg.Parent = f
             corner(bg, 2)
             
-            local fill = Instance.new("Frame", bg)
+            local fill = Instance.new("Frame")
             fill.Size = UDim2.new((d - min) / (max - min), 0, 1, 0)
             fill.BackgroundColor3 = Lib.THEME.ACCENT
+            fill.Parent = bg
             corner(fill, 2)
             
-            local b = Instance.new("Frame", bg)
+            local b = Instance.new("Frame")
             b.Size = UDim2.new(0, 10, 0, 10)
             b.Position = UDim2.new((d - min) / (max - min), -5, 0.5, -5)
             b.BackgroundColor3 = Lib.THEME.ACCENT
+            b.Parent = bg
             corner(b, 5)
             
-            local tr = Instance.new("TextButton", f)
+            local tr = Instance.new("TextButton")
             tr.Size = UDim2.new(1, 0, 1, 0)
             tr.BackgroundTransparency = 1
             tr.Text = ""
+            tr.Parent = f
             
             local prec, drag = 10 ^ (dec or 0), false
             local function fV(v) 
                 return (dec or 0) <= 0 and tostring(math.round(v)) or tostring(math.floor(v * prec + 0.5) / prec) 
             end
             
-            local function up(i) 
-                local rel = math.clamp((i.Position.X - bg.AbsolutePosition.X) / bg.AbsoluteSize.X, 0, 1) 
-                local v = math.floor((min + (max - min) * rel) * prec + 0.5) / prec 
+            local function up(pos) 
+                local rel = math.clamp((pos.X - bg.AbsolutePosition.X) / bg.AbsoluteSize.X, 0, 1) 
+                local v = (min + (max - min) * rel)
+                v = math.floor(v * prec + 0.5) / prec 
                 l.Text, fill.Size, b.Position = t .. ": " .. fV(v), UDim2.new(rel, 0, 1, 0), UDim2.new(rel, -5, 0.5, -5) 
                 c(v) 
             end
@@ -279,7 +318,7 @@ function Lib:CreateWindow(title, author, iconId)
             tr.InputBegan:Connect(function(i) 
                 if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then 
                     drag = true 
-                    up(i) 
+                    up(i.Position) 
                 end 
             end)
             UserInputService.InputEnded:Connect(function(i) 
@@ -289,11 +328,11 @@ function Lib:CreateWindow(title, author, iconId)
             end)
             UserInputService.InputChanged:Connect(function(i) 
                 if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then 
-                    up(i) 
+                    up(i.Position) 
                 end 
             end)
             
-            local SliderObj = {}
+            local SliderObj = {Instance = f}
             function SliderObj:Set(v)
                 local rel = math.clamp((v - min) / (max - min), 0, 1) 
                 l.Text, fill.Size, b.Position = t .. ": " .. fV(v), UDim2.new(rel, 0, 1, 0), UDim2.new(rel, -5, 0.5, -5) 
@@ -302,14 +341,15 @@ function Lib:CreateWindow(title, author, iconId)
         end
         
         function Target:AddInput(t, d, ph, c)
-            local f = Instance.new("Frame", ParentScroll)
+            local f = Instance.new("Frame")
             f.Size = UDim2.new(1, 0, 0, 55)
             f.BackgroundColor3 = Lib.THEME.BG_CONTENT
             f.BackgroundTransparency = 0.4
+            f.Parent = ParentScroll
             corner(f, 6)
             stroke(f, Lib.THEME.ACCENT)
 
-            local label = Instance.new("TextLabel", f)
+            local label = Instance.new("TextLabel")
             label.Size = UDim2.new(1, -20, 0, 25)
             label.Position = UDim2.new(0, 12, 0, 5)
             label.BackgroundTransparency = 1
@@ -318,7 +358,9 @@ function Lib:CreateWindow(title, author, iconId)
             label.Font = Enum.Font.Gotham
             label.TextSize = 13
             label.TextXAlignment = Enum.TextXAlignment.Left
-            local i = Instance.new("TextBox", f)
+            label.Parent = f
+            
+            local i = Instance.new("TextBox")
             i.Size = UDim2.new(1, -24, 0, 24)
             i.Position = UDim2.new(0, 12, 0, 26)
             i.BackgroundColor3 = Lib.THEME.BG_MAIN
@@ -328,21 +370,23 @@ function Lib:CreateWindow(title, author, iconId)
             i.Font = Enum.Font.Gotham
             i.TextSize = 12
             i.ClearTextOnFocus = false
+            i.Parent = f
             corner(i, 4)
             i.FocusLost:Connect(function() c(i.Text) end)
             
-            local InputObj = {Instance = i}
+            local InputObj = {Instance = f, TextBox = i}
             return InputObj
         end
         
         function Target:AddButton(t, cl, c)
-            local b = Instance.new("TextButton", ParentScroll)
+            local b = Instance.new("TextButton")
             b.Size = UDim2.new(1, 0, 0, 30)
             b.BackgroundColor3 = cl or Lib.THEME.DARK_ITEM
             b.Text = t
             b.TextColor3 = Lib.THEME.TEXT
             b.Font = Enum.Font.GothamBold
             b.TextSize = 11
+            b.Parent = ParentScroll
             corner(b, 6)
             stroke(b, Lib.THEME.ACCENT)
 
@@ -356,15 +400,16 @@ function Lib:CreateWindow(title, author, iconId)
         end
         
         function Target:AddDropdown(t, items, d, c)
-            local f = Instance.new("Frame", ParentScroll)
+            local f = Instance.new("Frame")
             f.Size = UDim2.new(1, 0, 0, 32)
             f.BackgroundColor3 = Lib.THEME.BG_CONTENT
             f.BackgroundTransparency = 0.4
             f.ClipsDescendants = true
+            f.Parent = ParentScroll
             corner(f, 6)
             stroke(f, Lib.THEME.ACCENT)
             
-            local l = Instance.new("TextButton", f)
+            local l = Instance.new("TextButton")
             l.Size = UDim2.new(1, 0, 0, 32)
             l.BackgroundTransparency = 1
             l.Text = "  " .. t .. ": " .. d
@@ -372,15 +417,18 @@ function Lib:CreateWindow(title, author, iconId)
             l.Font = Enum.Font.Gotham
             l.TextSize = 11
             l.TextXAlignment = Enum.TextXAlignment.Left
+            l.Parent = f
             
-            local list = Instance.new("Frame", f)
+            local list = Instance.new("Frame")
             list.Size = UDim2.new(1, 0, 0, #items * 26)
             list.Position = UDim2.new(0, 0, 0, 32)
             list.BackgroundTransparency = 1
-            local layout = Instance.new("UIListLayout", list)
+            list.Parent = f
+            local layout = Instance.new("UIListLayout")
+            layout.Parent = list
             
             for _, v in ipairs(items) do
-                local ib = Instance.new("TextButton", list)
+                local ib = Instance.new("TextButton")
                 ib.Size = UDim2.new(1, 0, 0, 26)
                 ib.BackgroundColor3 = Lib.THEME.DARK_ITEM
                 ib.BackgroundTransparency = 0.5
@@ -390,6 +438,7 @@ function Lib:CreateWindow(title, author, iconId)
                 ib.Font = Enum.Font.Gotham
                 ib.TextSize = 10
                 ib.TextXAlignment = Enum.TextXAlignment.Left
+                ib.Parent = list
                 ib.MouseButton1Click:Connect(function() 
                     l.Text = "  " .. t .. ": " .. tostring(v) 
                     tween(f, {Size = UDim2.new(1, 0, 0, 32)}, 0.2) 
@@ -403,22 +452,23 @@ function Lib:CreateWindow(title, author, iconId)
                 tween(f, {Size = UDim2.new(1, 0, 0, op and (32 + layout.AbsoluteContentSize.Y) or 32)}, 0.2) 
             end)
             
-            local DropObj = {}
+            local DropObj = {Instance = f}
             function DropObj:Set(v) l.Text = "  " .. t .. ": " .. tostring(v) end
             return DropObj
         end
         
         function Target:AddCollapsible(ti)
-            local c = Instance.new("Frame", ParentScroll)
+            local c = Instance.new("Frame")
             c.Size = UDim2.new(1, 0, 0, 30)
             c.BackgroundColor3 = Lib.THEME.BG_CONTENT
             c.BackgroundTransparency = 0.4
             c.ClipsDescendants = true
             c.BorderSizePixel = 0
+            c.Parent = ParentScroll
             corner(c, 6)
             stroke(c, Lib.THEME.ACCENT)
             
-            local btn = Instance.new("TextButton", c)
+            local btn = Instance.new("TextButton")
             btn.Size = UDim2.new(1, 0, 0, 30)
             btn.BackgroundTransparency = 1
             btn.Text = "  " .. ti .. " ▼"
@@ -426,34 +476,41 @@ function Lib:CreateWindow(title, author, iconId)
             btn.Font = Enum.Font.GothamBold
             btn.TextSize = 10
             btn.TextXAlignment = Enum.TextXAlignment.Left
+            btn.Parent = c
             
-            local con = Instance.new("Frame", c)
+            local con = Instance.new("Frame")
             con.Position = UDim2.new(0, 0, 0, 30)
             con.Size = UDim2.new(1, 0, 0, 0)
             con.BackgroundTransparency = 1
-            local ly = Instance.new("UIListLayout", con)
+            con.Parent = c
+            local ly = Instance.new("UIListLayout")
             ly.Padding = UDim.new(0, 4)
+            ly.Parent = con
             
             local op = false
-            btn.MouseButton1Click:Connect(function() 
-                op = not op 
+            local function updateH()
                 local h = op and (30 + ly.AbsoluteContentSize.Y + 8) or 30 
                 tween(c, {Size = UDim2.new(1, 0, 0, h)}, 0.3) 
                 btn.Text, btn.TextColor3 = "  " .. ti .. (op and " ▲" or " ▼"), op and Lib.THEME.ACCENT or Lib.THEME.TEXT 
+            end
+
+            btn.MouseButton1Click:Connect(function() 
+                op = not op 
+                updateH()
             end)
             
             ly:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() 
-                if op then c.Size = UDim2.new(1, 0, 0, 30 + ly.AbsoluteContentSize.Y + 8) end 
+                if op then updateH() end 
             end)
             
-            local CollapsibleObj = {Parent = c}
+            local CollapsibleObj = {Instance = c, Container = con}
             addCommonMethods(CollapsibleObj, con)
             return CollapsibleObj
         end
     end
 
     function Window:CreateTab(name)
-        local b = Instance.new("TextButton", TabContainer)
+        local b = Instance.new("TextButton")
         b.Size = UDim2.new(0.85, 0, 0, 36)
         b.BackgroundColor3 = Lib.THEME.DARK_ITEM
         b.BackgroundTransparency = 1
@@ -461,19 +518,23 @@ function Lib:CreateWindow(title, author, iconId)
         b.TextColor3 = Lib.THEME.TEXT_DIM
         b.Font = Enum.Font.GothamBold
         b.TextSize = 12
+        b.Parent = TabContainer
         corner(b, 8)
         
-        local p = Instance.new("ScrollingFrame", ContentArea)
+        local p = Instance.new("ScrollingFrame")
         p.Size = UDim2.new(1, 0, 1, 0)
         p.BackgroundTransparency = 1
         p.Visible = false
         p.ScrollBarThickness = 2
         p.ScrollBarImageColor3 = Lib.THEME.ACCENT
         p.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        p.CanvasSize = UDim2.new(0, 0, 0, 0) -- Important for AutomaticCanvasSize
+        p.Parent = ContentArea
         
-        local l = Instance.new("UIListLayout", p)
+        local l = Instance.new("UIListLayout")
         l.Padding = UDim.new(0, 8)
         l.SortOrder = Enum.SortOrder.LayoutOrder
+        l.Parent = p
         
         b.MouseButton1Click:Connect(function() 
             for _, x in ipairs(pages) do x.Visible = false end 
@@ -486,7 +547,7 @@ function Lib:CreateWindow(title, author, iconId)
         table.insert(pages, p)
         table.insert(tabBtns, b)
         
-        local Tab = {}
+        local Tab = {ScrollFrame = p, Instance = p}
         addCommonMethods(Tab, p)
         return Tab
     end
