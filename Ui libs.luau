@@ -12,8 +12,7 @@ local function track(conn)
 end
 
 local globalInput = {
-    activeDrag = nil,
-    activeSlider = nil
+    activeDrag = nil
 }
 
 track(UserInputService.InputChanged:Connect(function(input)
@@ -22,8 +21,6 @@ track(UserInputService.InputChanged:Connect(function(input)
             local obj, startPos, dragStart = globalInput.activeDrag.obj, globalInput.activeDrag.startPos, globalInput.activeDrag.dragStart
             local delta = input.Position - dragStart
             obj.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        elseif globalInput.activeSlider then
-            globalInput.activeSlider.update(input)
         end
     end
 end))
@@ -31,7 +28,6 @@ end))
 track(UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         globalInput.activeDrag = nil
-        globalInput.activeSlider = nil
     end
 end))
 
@@ -327,7 +323,7 @@ function Lib:CreateWindow(title, author, iconId)
             tr.Text = ""
             tr.Parent = f
             
-            local prec, drag = 10 ^ (dec or 0), false
+            local prec, dragSlider = 10 ^ (dec or 0), false
             local function fV(v) 
                 return (dec or 0) <= 0 and tostring(math.round(v)) or tostring(math.floor(v * prec + 0.5) / prec) 
             end
@@ -342,7 +338,17 @@ function Lib:CreateWindow(title, author, iconId)
             
             track(tr.InputBegan:Connect(function(i) 
                 if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then 
-                    globalInput.activeSlider = { update = up }
+                    dragSlider = true 
+                    up(i.Position) 
+                end 
+            end))
+            track(UserInputService.InputEnded:Connect(function(i) 
+                if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then 
+                    dragSlider = false 
+                end 
+            end))
+            track(UserInputService.InputChanged:Connect(function(i) 
+                if dragSlider and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then 
                     up(i.Position) 
                 end 
             end))
