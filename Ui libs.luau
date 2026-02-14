@@ -553,26 +553,38 @@ function Lib:CreateWindow(title, author, iconId)
         l.Parent = p
         
         b.MouseButton1Click:Connect(function() 
-            Window:SelectTab(table.find(tabBtns, b))
+            local targetIdx = nil
+            for i, v in ipairs(tabBtns) do
+                if v == b then
+                    targetIdx = i
+                    break
+                end
+            end
+            if targetIdx then
+                Window:SelectTab(targetIdx)
+            end
         end)
         
         table.insert(pages, p)
         table.insert(tabBtns, b)
         
-        local Tab = {ScrollFrame = p, Instance = p}
+        local Tab = {ScrollFrame = p, Instance = p, LayoutCount = 0}
         addCommonMethods(Tab, p)
         return Tab
     end
     
     function Window:SelectTab(num)
-        if #tabBtns >= num then
-            for i, p in ipairs(pages) do
-                p.Visible = (i == num)
-                local btn = tabBtns[i]
-                if btn then
-                    btn.BackgroundTransparency = (i == num) and 0 or 1
-                    btn.TextColor3 = (i == num) and Lib.THEME.ACCENT or Lib.THEME.TEXT_DIM
-                end
+        local n = tonumber(num)
+        if not n or not pages[n] then return end
+        
+        for i, p in ipairs(pages) do
+            p.Visible = (i == n)
+            local btn = tabBtns[i]
+            if btn then
+                tween(btn, {
+                    BackgroundTransparency = (i == n) and 0 or 1,
+                    TextColor3 = (i == n) and Lib.THEME.ACCENT or Lib.THEME.TEXT_DIM
+                }, 0.2)
             end
         end
     end
