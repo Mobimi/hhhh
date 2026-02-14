@@ -139,45 +139,9 @@ function Lib:CreateWindow(title, author, iconId)
     
     local Window = {}
     
-    function Window:CreateTab(name)
-        local b = Instance.new("TextButton", TabContainer)
-        b.Size = UDim2.new(0.85, 0, 0, 36)
-        b.BackgroundColor3 = Lib.THEME.DARK_ITEM
-        b.BackgroundTransparency = 1
-        b.Text = name
-        b.TextColor3 = Lib.THEME.TEXT_DIM
-        b.Font = Enum.Font.GothamBold
-        b.TextSize = 12
-        corner(b, 8)
-        stroke(b, Lib.THEME.DARK_ITEM, 1, true)
-        
-        local p = Instance.new("ScrollingFrame", ContentArea)
-        p.Size = UDim2.new(1, 0, 1, 0)
-        p.BackgroundTransparency = 1
-        p.Visible = false
-        p.ScrollBarThickness = 2
-        p.ScrollBarImageColor3 = Lib.THEME.ACCENT
-        p.AutomaticCanvasSize = Enum.AutomaticSize.Y
-        
-        local l = Instance.new("UIListLayout", p)
-        l.Padding = UDim.new(0, 8)
-        l.SortOrder = Enum.SortOrder.LayoutOrder
-        
-        b.MouseButton1Click:Connect(function() 
-            for _, x in ipairs(pages) do x.Visible = false end 
-            for _, x in ipairs(tabBtns) do tween(x, {BackgroundTransparency = 1, TextColor3 = Lib.THEME.TEXT_DIM}, 0.2) end 
-            p.Visible = true
-            b.BackgroundTransparency = 0
-            b.TextColor3 = Lib.THEME.ACCENT 
-        end)
-        
-        table.insert(pages, p)
-        table.insert(tabBtns, b)
-        
-        local Tab = {}
-        
-        function Tab:AddSection(title)
-            local f = Instance.new("Frame", p)
+    local function addCommonMethods(Target, ParentScroll)
+        function Target:AddSection(title)
+            local f = Instance.new("Frame", ParentScroll)
             f.Size = UDim2.new(1, 0, 0, 26)
             f.BackgroundTransparency = 1
             local label = Instance.new("TextLabel", f)
@@ -198,8 +162,8 @@ function Lib:CreateWindow(title, author, iconId)
             return f
         end
         
-        function Tab:AddToggle(t, d, c)
-            local f = Instance.new("Frame", p)
+        function Target:AddToggle(t, d, c)
+            local f = Instance.new("Frame", ParentScroll)
             f.Size = UDim2.new(1, 0, 0, 30)
             f.BackgroundColor3 = Lib.THEME.BG_CONTENT
             f.BackgroundTransparency = 0.4
@@ -247,8 +211,8 @@ function Lib:CreateWindow(title, author, iconId)
             }
         end
         
-        function Tab:AddSlider(t, min, max, d, dec, c)
-            local f = Instance.new("Frame", p)
+        function Target:AddSlider(t, min, max, d, dec, c)
+            local f = Instance.new("Frame", ParentScroll)
             f.Size = UDim2.new(1, 0, 0, 42)
             f.BackgroundColor3 = Lib.THEME.BG_CONTENT
             f.BackgroundTransparency = 0.4
@@ -324,8 +288,8 @@ function Lib:CreateWindow(title, author, iconId)
             }
         end
         
-        function Tab:AddInput(t, d, ph, c)
-            local f = Instance.new("Frame", p)
+        function Target:AddInput(t, d, ph, c)
+            local f = Instance.new("Frame", ParentScroll)
             f.Size = UDim2.new(1, 0, 0, 55)
             f.BackgroundColor3 = Lib.THEME.BG_CONTENT
             corner(f, 6)
@@ -353,8 +317,8 @@ function Lib:CreateWindow(title, author, iconId)
             return i
         end
         
-        function Tab:AddButton(t, cl, c)
-            local b = Instance.new("TextButton", p)
+        function Target:AddButton(t, cl, c)
+            local b = Instance.new("TextButton", ParentScroll)
             b.Size = UDim2.new(1, 0, 0, 30)
             b.BackgroundColor3 = cl or Lib.THEME.DARK_ITEM
             b.Text = t
@@ -371,8 +335,8 @@ function Lib:CreateWindow(title, author, iconId)
             return b
         end
         
-        function Tab:AddDropdown(t, items, d, c)
-            local f = Instance.new("Frame", p)
+        function Target:AddDropdown(t, items, d, c)
+            local f = Instance.new("Frame", ParentScroll)
             f.Size = UDim2.new(1, 0, 0, 32)
             f.BackgroundColor3 = Lib.THEME.BG_CONTENT
             f.BackgroundTransparency = 0.4
@@ -424,8 +388,8 @@ function Lib:CreateWindow(title, author, iconId)
             }
         end
         
-        function Tab:AddCollapsible(ti)
-            local c = Instance.new("Frame", p)
+        function Target:AddCollapsible(ti)
+            local c = Instance.new("Frame", ParentScroll)
             c.Size = UDim2.new(1, 0, 0, 30)
             c.BackgroundColor3 = Lib.THEME.BG_CONTENT
             c.BackgroundTransparency = 0.4
@@ -462,9 +426,49 @@ function Lib:CreateWindow(title, author, iconId)
                 if op then c.Size = UDim2.new(1, 0, 0, 30 + ly.AbsoluteContentSize.Y + 8) end 
             end)
             
-            return con
+            local CollapsibleObj = {}
+            addCommonMethods(CollapsibleObj, con)
+            return CollapsibleObj
         end
+    end
+
+    function Window:CreateTab(name)
+        local b = Instance.new("TextButton", TabContainer)
+        b.Size = UDim2.new(0.85, 0, 0, 36)
+        b.BackgroundColor3 = Lib.THEME.DARK_ITEM
+        b.BackgroundTransparency = 1
+        b.Text = name
+        b.TextColor3 = Lib.THEME.TEXT_DIM
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 12
+        corner(b, 8)
+        stroke(b, Lib.THEME.DARK_ITEM, 1, true)
         
+        local p = Instance.new("ScrollingFrame", ContentArea)
+        p.Size = UDim2.new(1, 0, 1, 0)
+        p.BackgroundTransparency = 1
+        p.Visible = false
+        p.ScrollBarThickness = 2
+        p.ScrollBarImageColor3 = Lib.THEME.ACCENT
+        p.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        
+        local l = Instance.new("UIListLayout", p)
+        l.Padding = UDim.new(0, 8)
+        l.SortOrder = Enum.SortOrder.LayoutOrder
+        
+        b.MouseButton1Click:Connect(function() 
+            for _, x in ipairs(pages) do x.Visible = false end 
+            for _, x in ipairs(tabBtns) do tween(x, {BackgroundTransparency = 1, TextColor3 = Lib.THEME.TEXT_DIM}, 0.2) end 
+            p.Visible = true
+            b.BackgroundTransparency = 0
+            b.TextColor3 = Lib.THEME.ACCENT 
+        end)
+        
+        table.insert(pages, p)
+        table.insert(tabBtns, b)
+        
+        local Tab = {}
+        addCommonMethods(Tab, p)
         return Tab
     end
     
@@ -478,7 +482,7 @@ function Lib:CreateWindow(title, author, iconId)
         end
     end
     
-    function Lib:SetIconButton(id)
+    function Window:SetIconButton(id)
         ToggleBtn.Image = "rbxthumb://type=Asset&id=" .. id .. "&w=420&h=420"
     end
 
