@@ -553,15 +553,9 @@ function Lib:CreateWindow(title, author, iconId)
         l.Parent = p
         
         b.MouseButton1Click:Connect(function() 
-            local targetIdx = nil
-            for i, v in ipairs(tabBtns) do
-                if v == b then
-                    targetIdx = i
-                    break
-                end
-            end
-            if targetIdx then
-                Window:SelectTab(targetIdx)
+            Window:SelectTab(#pages)
+            for i, btn in ipairs(tabBtns) do
+                if btn == b then Window:SelectTab(i) break end
             end
         end)
         
@@ -576,15 +570,12 @@ function Lib:CreateWindow(title, author, iconId)
     function Window:SelectTab(num)
         local n = tonumber(num)
         if not n or not pages[n] then return end
-        
-        for i, p in ipairs(pages) do
-            p.Visible = (i == n)
+        for i, page in ipairs(pages) do
+            page.Visible = (i == n)
             local btn = tabBtns[i]
             if btn then
-                tween(btn, {
-                    BackgroundTransparency = (i == n) and 0 or 1,
-                    TextColor3 = (i == n) and Lib.THEME.ACCENT or Lib.THEME.TEXT_DIM
-                }, 0.2)
+                btn.BackgroundTransparency = (i == n) and 0 or 1
+                btn.TextColor3 = (i == n) and Lib.THEME.ACCENT or Lib.THEME.TEXT_DIM
             end
         end
     end
