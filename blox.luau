@@ -706,29 +706,23 @@ bossFarmListCont:AddButton("Refresh Boss List", THEME.ACCENT, function() refresh
 TabBlox:AddSection("Blox Fruit Config")
 local combatConfig = TabBlox:AddCollapsible("Config")
 
+ui_controls.autoEquip = combatConfig:AddDropdown("Auto Equip Type", {"Melee", "Sword", "Blox Fruit"}, "Melee", function(v) autoEquipType = v end)
 
-combatConfig:AddSection("Aura Melee")
-ui_controls.auraEnabled = combatConfig:AddToggle("Enabled", true, function(v) auraEnabled = v if v then auraConnection = RunService.Heartbeat:Connect(performHit) elseif auraConnection then auraConnection:Disconnect() auraConnection = nil end end)
+ui_controls.auraEnabled = combatConfig:AddToggle("Enable Aura Melee", true, function(v) auraEnabled = v if v then auraConnection = RunService.Heartbeat:Connect(performHit) elseif auraConnection then auraConnection:Disconnect() auraConnection = nil end end)
 if auraEnabled then auraConnection = RunService.Heartbeat:Connect(performHit) end
 ui_controls.auraRadius = combatConfig:AddSlider("Range", 5, 1000, 1000, 0, function(v) auraRadius = v end)
 ui_controls.auraDelay = combatConfig:AddSlider("Delay", 0.01, 1, 0.01, 2, function(v) auraDelay = v end)
 ui_controls.auraMode = combatConfig:AddDropdown("Mode", {"Fast Attack Unencode", "Fast Attack Encode"}, "Fast Attack Unencode", function(v) auraMode = v:find("Encode") and "Encode" or "Unencode" end)
 
-
-combatConfig:AddSection("Aura Fruit")
-ui_controls.fruitEnabled = combatConfig:AddToggle("Enabled", true, function(v) auraFruitEnabled = v if v then spamConnection = RunService.Heartbeat:Connect(spamFruit) elseif spamConnection then spamConnection:Disconnect() spamConnection = nil end end)
+ui_controls.fruitEnabled = combatConfig:AddToggle("Enable Aura Fruit", true, function(v) auraFruitEnabled = v if v then spamConnection = RunService.Heartbeat:Connect(spamFruit) elseif spamConnection then spamConnection:Disconnect() spamConnection = nil end end)
 if auraFruitEnabled then spamConnection = RunService.Heartbeat:Connect(spamFruit) end
 ui_controls.fruitDelay = combatConfig:AddSlider("Delay", 0.01, 10, 0.01, 2, function(v) auraFruitDelay = v end)
 combatConfig:AddDropdown("Select Skill", {"Skill 1", "Skill 2", "Skill 3", "Skill 4", "Skill 5"}, "Skill 1", function(v) local s = tonumber(v:match("%d+")) for i = 1, 5 do selectedAttacks[i] = (i == s) end end)
 
-
-combatConfig:AddSection("Auto Ability")
 ui_controls.autoRaceV3 = combatConfig:AddToggle("Auto Race V3", false, function(v) autoRaceV3Enabled = v end)
 ui_controls.autoActiveV4 = combatConfig:AddToggle("Auto Active V4", false, function(v) autoActiveV4Enabled = v end)
 ui_controls.autoBuso = combatConfig:AddToggle("Auto Buso", true, function(v) autoBusoEnabled = v end)
 
-
-combatConfig:AddSection("Fast M1")
 ui_controls.fastM1Enabled = combatConfig:AddToggle("Enable Fast M1", false, function(v) fastM1Enabled = v applyFastM1() end)
 ui_controls.fastMelee = combatConfig:AddSlider("Melee/Gun Multi", 1, 5, 1, 0, function(v) fastMeleeMultiplier = math.floor(v + 0.5) applyFastM1() end)
 ui_controls.fastFruit = combatConfig:AddSlider("Fruit Multi", 1, 5, 1, 0, function(v) fastFruitMultiplier = math.floor(v + 0.5) applyFastM1() end)
