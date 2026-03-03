@@ -12,15 +12,15 @@ local function track(conn)
 end
 
 Lib.THEME = {
-    BG_MAIN = Color3.fromRGB(255, 255, 255),
-    BG_SIDE = Color3.fromRGB(245, 245, 250),
-    BG_CONTENT = Color3.fromRGB(255, 255, 255),
+    BG_MAIN = Color3.fromRGB(20, 20, 25),
+    BG_SIDE = Color3.fromRGB(15, 15, 20),
+    BG_CONTENT = Color3.fromRGB(25, 25, 30),
     ACCENT = Color3.fromRGB(255, 215, 0),
-    TEXT = Color3.fromRGB(0, 0, 0),
-    TEXT_DIM = Color3.fromRGB(80, 80, 80),
-    GREEN = Color3.fromRGB(34, 139, 34),
-    RED = Color3.fromRGB(178, 34, 34),
-    DARK_ITEM = Color3.fromRGB(235, 235, 240)
+    TEXT = Color3.fromRGB(240, 240, 240),
+    TEXT_DIM = Color3.fromRGB(150, 150, 150),
+    GREEN = Color3.fromRGB(50, 200, 50),
+    RED = Color3.fromRGB(220, 50, 50),
+    DARK_ITEM = Color3.fromRGB(35, 35, 40)
 }
 
 local function corner(p, r) 
