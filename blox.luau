@@ -9,26 +9,115 @@ local selectedBodyParts = {
     others = {Head = false, Torso = false, ["Left Arm"] = false, ["Right Arm"] = false, ["Left Leg"] = false, ["Right Leg"] = false, HumanoidRootPart = false},
     mob = {Head = false, Torso = false, ["Left Arm"] = false, ["Right Arm"] = false, ["Left Leg"] = false, ["Right Leg"] = false, HumanoidRootPart = false}
 }
-local mobPath, originalProperties, processedParts, mobCache = "workspace", setmetatable({}, {__mode = "k"}), {}, {lastScan = 0, list = {}}
-local auraEnabled, auraRadius, auraDelay, lastHitTime, hitCount, auraMode = true, 1000, 0.01, 0, 0, "Unencode"
+local autoBossTargetObj, lastBossDeadTime, masterBossList = nil, 0, {}
+
+-- [[ CENTRALIZED CACHE SYSTEM ]]
+local EntityCache = {
+    Enemies = {},
+    Players = {},
+    Islands = {},
+    LastUpdate = { Enemies = 0, Players = 0, Islands = 0 },
+    ScanIntervals = {
+        Enemies = isMobile and 1.5 or 0.8,
+        Players = 1.0,
+        Islands = 5.0
+    }
+}
+
+function EntityCache:UpdateEnemies()
+    local now = tick()
+    if now - self.LastUpdate.Enemies < self.ScanIntervals.Enemies then return end
+    self.LastUpdate.Enemies = now
+    
+    local newList = {}
+    local enemiesFolder = workspace:FindFirstChild("Enemies")
+    if enemiesFolder then
+        for _, e in ipairs(enemiesFolder:GetChildren()) do
+            if e:IsA("Model") and e:FindFirstChildOfClass("Humanoid") then
+                table.insert(newList, e)
+            end
+        end
+    end
+    
+    -- Some specific quests/events put mobs in workspace directly
+    for _, obj in ipairs(workspace:GetChildren()) do
+        if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") and not Players:GetPlayerFromCharacter(obj) then
+            if not enemiesFolder or obj.Parent ~= enemiesFolder then
+                table.insert(newList, obj)
+            end
+        end
+    end
+    self.Enemies = newList
+end
+
+function EntityCache:UpdatePlayers()
+    local now = tick()
+    if now - self.LastUpdate.Players < self.ScanIntervals.Players then return end
+    self.LastUpdate.Players = now
+    
+    local newList = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and p.Character then
+            table.insert(newList, p)
+        end
+    end
+    self.Players = newList
+end
+
+function EntityCache:UpdateIslands()
+    local now = tick()
+    if now - self.LastUpdate.Islands < self.ScanIntervals.Islands then return end
+    self.LastUpdate.Islands = now
+    
+    local map = workspace:FindFirstChild("Map")
+    if not map then return end
+    
+    self.Islands = {}
+    local islandPatterns = {
+        ["Mirage Island"] = {"MysticIsland", "MirageIsland", "mystic", "mirage"},
+        ["Kitsune Island"] = {"KitsuneIsland", "kitsune"},
+        ["Prehistoric Island"] = {"PrehistoricIsland", "prehistoric"}
+    }
+    
+    for _, islandName in ipairs({"Mirage Island", "Kitsune Island", "Prehistoric Island"}) do
+        local patterns = islandPatterns[islandName]
+        for _, child in ipairs(map:GetChildren()) do
+            local ln = child.Name:lower()
+            for _, p in ipairs(patterns) do
+                if ln:find(p:lower()) then
+                    self.Islands[islandName] = child
+                    break
+                end
+            end
+            if self.Islands[islandName] then break end
+        end
+    end
+end
+
+-- [[ CONFIGURATION & STATE ]]
+local originalProperties = setmetatable({}, {__mode = "k"})
+local auraEnabled, auraRadius, auraDelay, lastHitTime, auraMode = true, 1000, 0.01, 0, "Unencode"
 local auraFruitEnabled, auraFruitRadius, auraFruitDelay = true, 500, 0.01
-local attackRemote, hitRemote, auraConnection, isSpamming, spamConnection, lastAttack = nil, nil, nil, false, nil, 0
+local auraConnection, spamConnection, lastAttack = nil, nil, 0
 local proxyRemote, seedVal, attackRemoteDirect, hitRemoteDirect = nil, nil, nil, nil
-local selectedAttacks, fastM1Enabled, fastMeleeMultiplier, fastFruitMultiplier = {true, true, true, true, true}, false, 1, 1
-local boatSpeed, tpEnabled, tpSpeed, autoRaceV3Enabled, autoBusoEnabled, infinityJumpEnabled, antiAfkEnabled = 200, false, 2, false, true, false, true
-local jumpHeightEnabled, jumpHeightValue, dashLengthValue, waterWalkEnabled, antiWaterEnabled, antiWaterThreshold = false, 7.2, 0, true, true, -0.807
-local flyBoatEnabled, flyBoatSpeed, flyBoatHeight, currentBoat, flyBoatStyle, isPlayerOnBoat = false, 200, 125, nil, "Default", false
+local selectedAttacks, fastM1Enabled, fastMeleeMultiplier, fastFruitMultiplier = {true, false, false, false, false}, false, 1, 1
+local boatSpeed, tpEnabled, tpSpeed = 200, false, 2
+local autoRaceV3Enabled, autoBusoEnabled, infinityJumpEnabled, antiAfkEnabled = false, true, false, true
+local jumpHeightEnabled, jumpHeightValue, dashLengthValue = false, 7.2, 0
+local waterWalkEnabled, antiWaterEnabled, antiWaterThreshold = true, true, -0.807
+local flyBoatEnabled, flyBoatSpeed, flyBoatHeight, currentBoat, flyBoatStyle = false, 200, 125, nil, "Default"
 local islandTweenEnabled, islandTweenSpeed = {["Mirage Island"] = false, ["Kitsune Island"] = false, ["Prehistoric Island"] = false}, 360
-local espSettings, espConnection, espBillboards = { Enabled = false, ShowText = true, ShowBar = true }, nil, {}
+local espSettings, espBillboards = { Enabled = false, ShowText = true, ShowBar = true }, {}
 local islandEspSettings, islandEspBillboards = { Enabled = false, ESP_List = {["Mirage Island"] = false, ["Kitsune Island"] = false, ["Prehistoric Island"] = false} }, {}
-local autoChestMirage, autoChestStyle, autoChestType, autoActiveV4Enabled, autoTradeBonesEnabled, autoStoreFruitEnabled, autoDungeonEnabled = false, "Tween", "All", false, false, false, false
+local autoChestMirage, autoChestStyle, autoChestType = false, "Tween", "All"
+local autoActiveV4Enabled, autoTradeBonesEnabled, autoStoreFruitEnabled, autoRandomFruitEnabled, autoDungeonEnabled = false, false, false, false, false
 local autoBossEnabled, autoBossHopEnabled, customBossEnabled, selectedBosses = false, false, false, {}
 local autoUpgradeRaceEnabled = false
 local autoFarmBonesEnabled, autoBoneTargetObj = false, nil
 local autoKatakuriEnabled, autoSpawnKatakuri, autoKatakuriTargetObj = false, false, nil
 local boneMobs = {"Reborn Skeleton", "Demonic Soul", "Posessed Mummy", "Living Zombie"}
 local cakeMobs = {"Cake Prince", "Dough King", "Baking Staff", "Cake Guard", "Cookie Crafter", "Head Baker"}
-local autoBossTargetObj, lastBossDeadTime, masterBossList = nil, 0, {}
+local mobPath = "workspace"
 
 local autoEquipType = "Melee" 
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
@@ -41,6 +130,7 @@ if _G.J4F_WINDOW then
     _G.J4F_WINDOW = nil
 end
 
+-- Load UI Lib from GitHub for public use
 local UiLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Mobimi/hhhh/refs/heads/main/Ui%20libs.luau"))()
 local Window = UiLib:CreateWindow("j4f", "tiktok: @realayako")
 _G.J4F_WINDOW = Window -- Lưu lại để dọn dẹp lần sau
@@ -51,6 +141,32 @@ local THEME = UiLib.THEME
 local function saveOriginal(p) if not originalProperties[p] then originalProperties[p] = {Size=p.Size, Transparency=p.Transparency, CanCollide=p.CanCollide, Color=p.Color, Material=p.Material} end end
 local function applyHitbox(p, s, sh, c) if p.Size ~= Vector3.new(s,s,s) then p.Size = Vector3.new(s,s,s) end p.Transparency, p.CanCollide = sh and 0.5 or 1, false if sh then p.Color, p.Material = c, Enum.Material.ForceField end end
 local function restoreHitbox(p) if originalProperties[p] then local o = originalProperties[p] p.Size, p.Transparency, p.CanCollide, p.Color, p.Material = o.Size, o.Transparency, o.CanCollide, o.Color, o.Material end end
+
+-- [[ REACTIVE UI HELPER ]]
+local function setTextSafe(label, text)
+    if label and label.Text ~= text then
+        label.Text = text
+    end
+end
+
+-- [[ MEMORY-EFFICIENT EQUIP ]]
+local function equipTool(tt)
+    if not char then return end
+    local backpack = player:FindFirstChild("Backpack")
+    local tool = nil
+    for _, t in ipairs(char:GetChildren()) do if t:IsA("Tool") and t.ToolTip == tt then tool = t break end end
+    if not tool and backpack then
+        for _, t in ipairs(backpack:GetChildren()) do
+            if t:IsA("Tool") and t.ToolTip == tt then tool = t char.Humanoid:EquipTool(t) break end
+        end
+    end
+    if tool then
+        pcall(function()
+            local ev = tool:FindFirstChild("EquipEvent")
+            if ev then ev:FireServer(true) end
+        end)
+    end
+end
 local function expandHitbox(tt)
     if tt == "self" then 
         if not char then return end 
@@ -325,7 +441,7 @@ end
 local boatStatusLabel
 local function updateBoatSpeeds()
     if not workspace:FindFirstChild("Boats") then 
-        if boatStatusLabel then boatStatusLabel.Text = "❌ Không thấy thuyền" boatStatusLabel.TextColor3 = THEME.RED end
+        if boatStatusLabel then setTextSafe(boatStatusLabel, "❌ Không thấy thuyền") boatStatusLabel.TextColor3 = THEME.RED end
         return 
     end
     local count = 0
@@ -334,8 +450,8 @@ local function updateBoatSpeeds()
         if vs and vs:IsA("VehicleSeat") then vs.MaxSpeed = boatSpeed; count += 1 end
     end
     if boatStatusLabel then
-        if count > 0 then boatStatusLabel.Text = "✅ Đang tăng tốc: "..count.." thuyền" boatStatusLabel.TextColor3 = THEME.GREEN
-        else boatStatusLabel.Text = "❌ Không có thuyền nào" boatStatusLabel.TextColor3 = THEME.RED end
+        if count > 0 then setTextSafe(boatStatusLabel, "✅ Đang tăng tốc: "..count.." thuyền") boatStatusLabel.TextColor3 = THEME.GREEN
+        else setTextSafe(boatStatusLabel, "❌ Không có thuyền nào") boatStatusLabel.TextColor3 = THEME.RED end
     end
 end
 
@@ -436,7 +552,7 @@ local function findTargetServer()
     local placeId = game.PlaceId
     local serverBrowser = ReplicatedStorage:FindFirstChild("__ServerBrowser")
     if serverBrowser then
-        if hopStatusLabel then hopStatusLabel.Text = "🚀 Đang săn server vắng (100 trang)..." end
+        if hopStatusLabel then setTextSafe(hopStatusLabel, "🚀 Đang săn server vắng (100 trang)...") end
         local allInternalServers, threads, maxPages = {}, 0, 100
         for i = 1, maxPages do
             task.spawn(function()
@@ -507,26 +623,26 @@ end
 
 local function hopToOldServer(mode)
     if not hopStatusLabel then return end
-    hopStatusLabel.Text = "🔍 Đang săn server "..mode.."..."
+    setTextSafe(hopStatusLabel, "🔍 Đang săn server "..mode.."...")
     task.spawn(function()
         local oldServers = findOldServer(mode)
         if #oldServers > 0 then
             local target = oldServers[math.random(1, math.min((mode == "4h" and 3 or 10), #oldServers))]
-            hopStatusLabel.Text = "✅ Đã thấy "..mode.."! Đang nhảy..."
+            setTextSafe(hopStatusLabel, "✅ Đã thấy "..mode.."! Đang nhảy...")
             task.wait(0.5) TeleportService:TeleportToPlaceInstance(game.PlaceId, target.id, player)
-        else hopStatusLabel.Text = "❌ Không tìm thấy server "..mode.."!" end
+        else setTextSafe(hopStatusLabel, "❌ Không tìm thấy server "..mode.."!") end
     end)
 end
 
 local function executeHop()
     local now = tick()
     if now - lastHopTime < HOP_COOLDOWN then
-        if hopStatusLabel then hopStatusLabel.Text = "⏳ Chờ " .. math.ceil(HOP_COOLDOWN - (now - lastHopTime)) .. "s..." end
+        if hopStatusLabel then setTextSafe(hopStatusLabel, "⏳ Chờ " .. math.ceil(HOP_COOLDOWN - (now - lastHopTime)) .. "s...") end
         return
     end
     lastHopTime = now
     if not hopStatusLabel then return end
-    hopStatusLabel.Text = "🔍 Đang tìm server vắng mới..."
+    setTextSafe(hopStatusLabel, "🔍 Đang tìm server vắng mới...")
     task.spawn(function()
         local target = findTargetServer()
         if target then
@@ -535,12 +651,12 @@ local function executeHop()
             local attempts = 0
             repeat
                 attempts += 1
-                hopStatusLabel.Text = "✅ Đang nhảy (Lần "..attempts..")..."
+                setTextSafe(hopStatusLabel, "✅ Đang nhảy (Lần "..attempts..")...")
                 local success = pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, target.id, player) end)
                 if not success then task.wait(3) end
             until attempts >= 3
         else
-            hopStatusLabel.Text = "❌ Không tìm thấy server mới!"
+            setTextSafe(hopStatusLabel, "❌ Không tìm thấy server mới!")
             hopStatusLabel.TextColor3 = THEME.RED
         end
     end)
@@ -939,7 +1055,10 @@ RunService.Heartbeat:Connect(function(dt)
     end
 
     if flyBoatEnabled and currentBoat and currentBoat.Parent then
-        local seat = currentBoat:FindFirstChildOfClass("VehicleSeat") or currentBoat:FindFirstChild("VehicleSeat", true)
+        if not cache.boatSeat or cache.boatSeat.Parent ~= currentBoat then
+            cache.boatSeat = currentBoat:FindFirstChildOfClass("VehicleSeat") or currentBoat:FindFirstChild("VehicleSeat", true)
+        end
+        local seat = cache.boatSeat
         isPlayerOnBoat = (seat and seat.Occupant ~= nil)
         if isPlayerOnBoat then
             if not cache.boatTarget then cache.boatTarget = hrp.Position end
@@ -1286,23 +1405,7 @@ task.spawn(function()
             if target then
                 local tPart = target:IsA("Model") and (target.PrimaryPart or target:FindFirstChild("HumanoidRootPart") or target:FindFirstChildWhichIsA("BasePart")) or target
                 if tPart and (char.HumanoidRootPart.Position - tPart.Position).Magnitude < 150 then
-                    local function equip(tt)
-                        local backpack = player:FindFirstChild("Backpack")
-                        local tool = nil
-                        for _, t in ipairs(char:GetChildren()) do if t:IsA("Tool") and t.ToolTip == tt then tool = t break end end
-                        if not tool and backpack then
-                            for _, t in ipairs(backpack:GetChildren()) do
-                                if t:IsA("Tool") and t.ToolTip == tt then tool = t char.Humanoid:EquipTool(t) break end
-                            end
-                        end
-                        if tool then
-                            pcall(function()
-                                local ev = tool:FindFirstChild("EquipEvent")
-                                if ev then ev:FireServer(true) end
-                            end)
-                        end
-                    end
-                    equip(autoEquipType)
+                    equipTool(autoEquipType)
                 end
             end
         end
