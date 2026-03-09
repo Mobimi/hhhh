@@ -115,6 +115,7 @@ local autoBossEnabled, autoBossHopEnabled, customBossEnabled, selectedBosses = f
 local autoUpgradeRaceEnabled = false
 local autoFarmBonesEnabled, autoBoneTargetObj = false, nil
 local autoKatakuriEnabled, autoSpawnKatakuri, autoKatakuriTargetObj = false, false, nil
+local autoRaidEnabled, currentRaidIslandIdx, autoRaidTargetObj = false, 1, nil
 local boneMobs = {"Reborn Skeleton", "Demonic Soul", "Posessed Mummy", "Living Zombie"}
 local cakeMobs = {"Cake Prince", "Dough King", "Baking Staff", "Cake Guard", "Cookie Crafter", "Head Baker"}
 local mobPath = "workspace"
@@ -133,8 +134,8 @@ end
 -- Load UI Lib from GitHub for public use
 local UiLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Mobimi/hhhh/refs/heads/main/Ui%20libs.luau"))()
 local Window = UiLib:CreateWindow("j4f", "tiktok: @realayako")
-_G.J4F_WINDOW = Window -- Lưu lại để dọn dẹp lần sau
 local THEME = UiLib.THEME
+_G.J4F_WINDOW = Window -- Lưu lại để dọn dẹp lần sau
 
 
 
@@ -798,6 +799,9 @@ local bossSelectContainer = bossFarmListCont:AddCollapsible("Select Bosses")
 ui_controls.bossSelectFrame = bossSelectContainer.Instance
 ui_controls.bossSelectFrame.Visible = false
 
+local autoRaidConfig = TabSpecialFarm:AddCollapsible("Auto Raid")
+ui_controls.autoRaid = autoRaidConfig:AddToggle("Enable Auto Raid", false, function(v) autoRaidEnabled = v currentRaidIslandIdx = 1 end)
+
 local function refreshBossList()
     for _, child in ipairs(bossSelectContainer.Container:GetChildren()) do
         if not child:IsA("UIListLayout") then child:Destroy() end
@@ -1162,6 +1166,23 @@ RunService.Heartbeat:Connect(function(dt)
                 if direction.X == direction.X then hrp.CFrame = hrp.CFrame + (direction * moveDist) end
             end
         end
+    elseif autoRaidEnabled and autoRaidTargetObj then
+        local tH = autoRaidTargetObj:IsA("Model") and autoRaidTargetObj:FindFirstChildOfClass("Humanoid")
+        if tH and tH.Health <= 0 then autoRaidTargetObj = nil return end
+        local targetPart = autoRaidTargetObj:IsA("Model") and (autoRaidTargetObj.PrimaryPart or autoRaidTargetObj:FindFirstChild("HumanoidRootPart") or autoRaidTargetObj:FindFirstChildWhichIsA("BasePart")) or autoRaidTargetObj
+        if targetPart then
+            for _, v in ipairs(characterParts) do v.CanCollide = false end
+            hrp.Velocity = Vector3.new(0, 0, 0)
+            local isMob = autoRaidTargetObj:IsA("Model") and autoRaidTargetObj:FindFirstChildOfClass("Humanoid")
+            local targetPos = targetPart.Position + (isMob and Vector3.new(0, safeHeight, 0) or Vector3.new(0, 70, 0))
+            local dist = (hrp.Position - targetPos).Magnitude
+            if dist > 0.5 then
+                local speed = (dist < 150) and 1500 or 360
+                local moveDist = math.min(speed * dt, dist)
+                local direction = (targetPos - hrp.Position).Unit
+                if direction.X == direction.X then hrp.CFrame = hrp.CFrame + (direction * moveDist) end
+            end
+        end
     end
     
 
@@ -1400,8 +1421,74 @@ task.spawn(function()
         else autoKatakuriTargetObj = nil end
 
 
+        if autoRaidEnabled and char and char:FindFirstChild("HumanoidRootPart") then
+            pcall(function()
+                local myHRP = char.HumanoidRootPart
+                local enemiesFolder = workspace:FindFirstChild("Enemies")
+                local raidMap = workspace.Map:FindFirstChild("RaidMap")
+                local foundTarget = nil
+                
+                if enemiesFolder and #enemiesFolder:GetChildren() > 0 then
+                    local nearestDist = math.huge
+                    for _, e in ipairs(enemiesFolder:GetChildren()) do
+                        local eHRP = e:FindFirstChild("HumanoidRootPart")
+                        local eHum = e:FindFirstChildOfClass("Humanoid")
+                        if eHRP and eHum and eHum.Health > 0 then
+                            local d = (myHRP.Position - eHRP.Position).Magnitude
+                            if d < nearestDist then
+                                nearestDist = d
+                                foundTarget = e
+                            end
+                        end
+                    end
+                end
+                
+                if foundTarget then
+                    autoRaidTargetObj = foundTarget
+                else
+                    if raidMap then
+                        local islandSearch = "RaidIsland" .. tostring(currentRaidIslandIdx)
+                        local islandObj = raidMap:FindFirstChild(islandSearch)
+                        
+                        if not islandObj then
+                            for checkIdx = 1, 5 do
+                                if raidMap:FindFirstChild("RaidIsland" .. tostring(checkIdx)) then
+                                    currentRaidIslandIdx = checkIdx
+                                    islandObj = raidMap:FindFirstChild("RaidIsland" .. tostring(checkIdx))
+                                    break
+                                end
+                            end
+                        end
+
+                        if islandObj then
+                            local basePart = islandObj:FindFirstChildWhichIsA("BasePart", true)
+                            if basePart then
+                                local dist = (myHRP.Position - basePart.Position).Magnitude
+                                if dist < 100 then
+                                    local nextIdx = currentRaidIslandIdx + 1
+                                    if raidMap:FindFirstChild("RaidIsland" .. tostring(nextIdx)) then
+                                        currentRaidIslandIdx = nextIdx
+                                    end
+                                end
+                                autoRaidTargetObj = basePart
+                            else
+                                autoRaidTargetObj = islandObj
+                            end
+                        else
+                            autoRaidTargetObj = nil
+                        end
+                    else
+                        autoRaidTargetObj = nil
+                    end
+                end
+            end)
+        else
+            autoRaidTargetObj = nil
+        end
+
+
         if char and char:FindFirstChild("HumanoidRootPart") then
-            local target = autoBossTargetObj or autoBoneTargetObj or autoKatakuriTargetObj
+            local target = autoBossTargetObj or autoBoneTargetObj or autoKatakuriTargetObj or autoRaidTargetObj
             if target then
                 local tPart = target:IsA("Model") and (target.PrimaryPart or target:FindFirstChild("HumanoidRootPart") or target:FindFirstChildWhichIsA("BasePart")) or target
                 if tPart and (char.HumanoidRootPart.Position - tPart.Position).Magnitude < 150 then
