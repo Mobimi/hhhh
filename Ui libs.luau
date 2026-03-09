@@ -82,7 +82,7 @@ function Lib:CreateWindow(title, author, iconId)
     ToggleBtn.Position = UDim2.new(0.02, 0, 0.5, -30)
     ToggleBtn.BackgroundColor3 = Lib.THEME.BG_SIDE
     ToggleBtn.BackgroundTransparency = 0.2
-    ToggleBtn.Image = "rbxthumb://type=Asset&id=" .. (iconId or "84053545044369") .. "&w=420&h=420"
+    ToggleBtn.Image = "rbxthumb://type=Asset&id=" .. (iconId or "91598067356551") .. "&w=420&h=420"
     ToggleBtn.ScaleType = Enum.ScaleType.Fit
     ToggleBtn.ZIndex = 15
     ToggleBtn.Parent = ScreenGui
