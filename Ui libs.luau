@@ -213,12 +213,9 @@ function Lib:CreateWindow(title, author, iconId)
         function Target:AddToggle(t, d, c)
             local f = Instance.new("Frame")
             f.Size = UDim2.new(1, 0, 0, 30)
-            f.BackgroundColor3 = Lib.THEME.BG_CONTENT
-            f.BackgroundTransparency = 0.4
+            f.BackgroundTransparency = 1
             f.LayoutOrder = getIdx()
             f.Parent = ParentScroll
-            corner(f, 6)
-            stroke(f, Lib.THEME.ACCENT)
             
             local l = Instance.new("TextLabel")
             l.Size = UDim2.new(1, -50, 1, 0)
@@ -234,11 +231,10 @@ function Lib:CreateWindow(title, author, iconId)
             local btn = Instance.new("TextButton")
             btn.Size = UDim2.new(0, 30, 0, 16)
             btn.Position = UDim2.new(1, -40, 0.5, -8)
-            btn.BackgroundColor3 = d and Lib.THEME.ACCENT or Color3.fromRGB(200, 200, 200)
+            btn.BackgroundColor3 = d and Lib.THEME.ACCENT or Color3.fromRGB(60, 60, 70)
             btn.Text = ""
             btn.Parent = f
             corner(btn, 8)
-            stroke(btn, Lib.THEME.ACCENT)
             
             local o = Instance.new("Frame")
             o.Size = UDim2.new(0, 12, 0, 12)
@@ -249,7 +245,7 @@ function Lib:CreateWindow(title, author, iconId)
             
             local state = d
             local function update()
-                tween(btn, {BackgroundColor3 = state and Lib.THEME.ACCENT or Color3.fromRGB(200, 200, 200)}, 0.2) 
+                tween(btn, {BackgroundColor3 = state and Lib.THEME.ACCENT or Color3.fromRGB(60, 60, 70)}, 0.2) 
                 tween(o, {Position = UDim2.new(state and 1 or 0, state and -14 or 2, 0.5, -6)}, 0.2) 
             end
 
@@ -270,12 +266,9 @@ function Lib:CreateWindow(title, author, iconId)
         function Target:AddSlider(t, min, max, d, dec, c)
             local f = Instance.new("Frame")
             f.Size = UDim2.new(1, 0, 0, 42)
-            f.BackgroundColor3 = Lib.THEME.BG_CONTENT
-            f.BackgroundTransparency = 0.4
+            f.BackgroundTransparency = 1
             f.LayoutOrder = getIdx()
             f.Parent = ParentScroll
-            corner(f, 6)
-            stroke(f, Lib.THEME.ACCENT)
             
             local l = Instance.new("TextLabel")
             l.Size = UDim2.new(1, -20, 0, 20)
@@ -291,7 +284,7 @@ function Lib:CreateWindow(title, author, iconId)
             local bg = Instance.new("Frame")
             bg.Size = UDim2.new(1, -20, 0, 3)
             bg.Position = UDim2.new(0, 10, 0, 30)
-            bg.BackgroundColor3 = Color3.new(0, 0, 0)
+            bg.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
             bg.Parent = f
             corner(bg, 2)
             
@@ -355,12 +348,9 @@ function Lib:CreateWindow(title, author, iconId)
         function Target:AddInput(t, d, ph, c)
             local f = Instance.new("Frame")
             f.Size = UDim2.new(1, 0, 0, 55)
-            f.BackgroundColor3 = Lib.THEME.BG_CONTENT
-            f.BackgroundTransparency = 0.4
+            f.BackgroundTransparency = 1
             f.LayoutOrder = getIdx()
             f.Parent = ParentScroll
-            corner(f, 6)
-            stroke(f, Lib.THEME.ACCENT)
 
             local label = Instance.new("TextLabel")
             label.Size = UDim2.new(1, -20, 0, 25)
@@ -376,7 +366,7 @@ function Lib:CreateWindow(title, author, iconId)
             local i = Instance.new("TextBox")
             i.Size = UDim2.new(1, -24, 0, 24)
             i.Position = UDim2.new(0, 12, 0, 26)
-            i.BackgroundColor3 = Lib.THEME.BG_MAIN
+            i.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
             i.Text = d
             i.PlaceholderText = ph
             i.TextColor3 = Lib.THEME.TEXT
@@ -385,6 +375,7 @@ function Lib:CreateWindow(title, author, iconId)
             i.ClearTextOnFocus = false
             i.Parent = f
             corner(i, 4)
+            stroke(i, Lib.THEME.ACCENT)
             track(i.FocusLost:Connect(function() c(i.Text) end))
             
             local InputObj = {Instance = f, TextBox = i}
@@ -394,7 +385,8 @@ function Lib:CreateWindow(title, author, iconId)
         function Target:AddButton(t, cl, c)
             local b = Instance.new("TextButton")
             b.Size = UDim2.new(1, 0, 0, 30)
-            b.BackgroundColor3 = cl or Lib.THEME.DARK_ITEM
+            b.BackgroundColor3 = cl or Lib.THEME.ACCENT
+            b.BackgroundTransparency = 0.8
             b.Text = t
             b.TextColor3 = Lib.THEME.TEXT
             b.Font = Enum.Font.GothamBold
@@ -407,7 +399,7 @@ function Lib:CreateWindow(title, author, iconId)
             track(b.MouseButton1Click:Connect(function() 
                 tween(b, {BackgroundTransparency = 0.5}, 0.1) 
                 task.wait(0.1) 
-                tween(b, {BackgroundTransparency = 0}, 0.1) 
+                tween(b, {BackgroundTransparency = 0.8}, 0.1) 
                 c() 
             end))
             return b
@@ -416,13 +408,10 @@ function Lib:CreateWindow(title, author, iconId)
         function Target:AddDropdown(t, items, d, c)
             local f = Instance.new("Frame")
             f.Size = UDim2.new(1, 0, 0, 32)
-            f.BackgroundColor3 = Lib.THEME.BG_CONTENT
-            f.BackgroundTransparency = 0.4
+            f.BackgroundTransparency = 1
             f.ClipsDescendants = true
             f.LayoutOrder = getIdx()
             f.Parent = ParentScroll
-            corner(f, 6)
-            stroke(f, Lib.THEME.ACCENT)
             
             local l = Instance.new("TextButton")
             l.Size = UDim2.new(1, 0, 0, 32)
