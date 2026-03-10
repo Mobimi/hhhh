@@ -438,24 +438,22 @@ function Lib:CreateWindow(title, author, iconId)
             scroll.Size = UDim2.new(1, 0, 0, 0)
             scroll.Position = UDim2.new(0, 0, 0, 32)
             scroll.BackgroundTransparency = 1
+            scroll.BorderSizePixel = 0
             scroll.ScrollBarThickness = 2
             scroll.ScrollBarImageColor3 = Lib.THEME.ACCENT
             scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
             scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+            scroll.Visible = false
             scroll.Parent = f
             
-            local list = Instance.new("Frame")
-            list.Size = UDim2.new(1, 0, 1, 0)
-            list.BackgroundTransparency = 1
-            list.Parent = scroll
             local layout = Instance.new("UIListLayout")
             layout.SortOrder = Enum.SortOrder.LayoutOrder
-            layout.Parent = list
+            layout.Parent = scroll
             
             for ide, v in ipairs(items) do
                 local ib = Instance.new("TextButton")
                 ib.Size = UDim2.new(1, 0, 0, 26)
-                ib.BackgroundColor3 = Lib.THEME.DARK_ITEM
+                ib.BackgroundColor3 = Lib.THEME.ACCENT
                 ib.BackgroundTransparency = 1
                 ib.BorderSizePixel = 0
                 ib.Text = "    " .. tostring(v)
@@ -464,10 +462,10 @@ function Lib:CreateWindow(title, author, iconId)
                 ib.TextSize = 10
                 ib.LayoutOrder = ide
                 ib.TextXAlignment = Enum.TextXAlignment.Left
-                ib.Parent = list
+                ib.Parent = scroll
 
                 track(ib.MouseEnter:Connect(function()
-                    tween(ib, {BackgroundTransparency = 0.5, TextColor3 = Lib.THEME.TEXT}, 0.2)
+                    tween(ib, {BackgroundTransparency = 0.8, TextColor3 = Lib.THEME.TEXT}, 0.2)
                 end))
                 track(ib.MouseLeave:Connect(function()
                     tween(ib, {BackgroundTransparency = 1, TextColor3 = Lib.THEME.TEXT_DIM}, 0.2)
@@ -477,6 +475,7 @@ function Lib:CreateWindow(title, author, iconId)
                     l.Text = "  " .. t .. ": " .. tostring(v) 
                     tween(f, {Size = UDim2.new(1, 0, 0, 32)}, 0.2)
                     tween(scroll, {Size = UDim2.new(1, 0, 0, 0)}, 0.2)
+                    task.delay(0.2, function() scroll.Visible = false end)
                     c(v) 
                 end))
             end
@@ -484,9 +483,11 @@ function Lib:CreateWindow(title, author, iconId)
             local op = false
             track(l.MouseButton1Click:Connect(function() 
                 op = not op 
-                local targetH = math.min(layout.AbsoluteContentSize.Y, 130)
+                if op then scroll.Visible = true end
+                local targetH = math.min(#items * 26, 130)
                 tween(f, {Size = UDim2.new(1, 0, 0, op and (32 + targetH + 4) or 32)}, 0.2)
                 tween(scroll, {Size = UDim2.new(1, 0, 0, op and targetH or 0)}, 0.2)
+                if not op then task.delay(0.2, function() scroll.Visible = false end) end
             end))
             
             local DropObj = {Instance = f}
