@@ -132,7 +132,7 @@ if _G.J4F_WINDOW then
 end
 
 -- Load UI Lib from GitHub for public use
-local UiLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Mobimi/hhhh/refs/heads/main/Ui%20libs.luau"))()
+local UiLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Mobimi/hhhh/refs/heads/main/Ui%20libs.luau?v=" .. tick()))()
 local Window = UiLib:CreateWindow("j4f", "tiktok: @realayako")
 local THEME = UiLib.THEME
 _G.J4F_WINDOW = Window -- Lưu lại để dọn dẹp lần sau
@@ -740,23 +740,23 @@ local TabSettings = Window:CreateTab("Settings")
 local currentHBT = "self"
 local hbToggleUi, hbSizeUi, hbShowUi, hbPathUi, hbMobSection, partToggles = nil, nil, nil, nil, nil, {}
 
-TabHitbox:AddSection("Target Settings")
-TabHitbox:AddDropdown("Select Target", {"Self", "Players", "Mobs"}, "Self", function(v)
+local hitboxGroup = TabHitbox:AddCollapsible("Hitbox Settings")
+hitboxGroup:AddSection("Target Settings")
+hitboxGroup:AddDropdown("Select Target", {"Self", "Players", "Mobs"}, "Self", function(v)
     local mapping = {["Self"] = "self", ["Players"] = "others", ["Mobs"] = "mob"}
     currentHBT = mapping[v] or "self"
     hbToggleUi.Set(hitboxEnabled[currentHBT]) hbSizeUi.Set(hitboxSize[currentHBT]) hbShowUi.Set(showHitbox[currentHBT])
     local isMob = (currentHBT == "mob")
-    if hbMobSection then hbMobSection.Visible = isMob end
-    if hbPathUi then hbPathUi.Parent.Visible = isMob end
+    if hbMobSection then hbMobSection.Instance.Visible = isMob end
+    if hbPathUi then hbPathUi.Instance.Parent.Visible = isMob end
     for p, toggle in pairs(partToggles) do toggle.Set(selectedBodyParts[currentHBT][p]) end
 end)
 
-TabHitbox:AddSection("Hitbox Controls")
-hbToggleUi = TabHitbox:AddToggle("Enabled", false, function(v) hitboxEnabled[currentHBT] = v if not v then disableHitbox(currentHBT) end end) ui_controls.hbToggle = hbToggleUi
-hbSizeUi = TabHitbox:AddSlider("Size", 5, 500, 10, 0, function(v) hitboxSize[currentHBT] = v end) ui_controls.hbSize = hbSizeUi
-hbShowUi = TabHitbox:AddToggle("Show Hitbox", false, function(v) showHitbox[currentHBT] = v end) ui_controls.hbShow = hbShowUi
+hitboxGroup:AddSection("Hitbox Controls")
+hbToggleUi = hitboxGroup:AddToggle("Enabled", false, function(v) hitboxEnabled[currentHBT] = v if not v then disableHitbox(currentHBT) end end) ui_controls.hbToggle = hbToggleUi
+hbSizeUi = hitboxGroup:AddSlider("Size", 5, 500, 10, 0, function(v) hitboxSize[currentHBT] = v end) ui_controls.hbSize = hbSizeUi
+hbShowUi = hitboxGroup:AddToggle("Show Hitbox", false, function(v) showHitbox[currentHBT] = v end) ui_controls.hbShow = hbShowUi
 
-TabHitbox:AddSection("Part Selection")
 local partList = TabHitbox:AddCollapsible("Select Body Parts")
 local parts = {"Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg", "HumanoidRootPart"}
 for _, p in ipairs(parts) do 
@@ -764,13 +764,11 @@ for _, p in ipairs(parts) do
     ui_controls["part_"..p] = partToggles[p]
 end
 
-hbMobSection = TabHitbox:AddSection("Mob Settings")
-hbPathUi = TabHitbox:AddInput("Mob Path", mobPath, "workspace.Enemies", function(v) mobPath = v end) 
+hbMobSection = TabHitbox:AddCollapsible("Mob Settings")
+hbPathUi = hbMobSection:AddInput("Mob Path", mobPath, "workspace.Enemies", function(v) mobPath = v end) 
 ui_controls.hbPath = hbPathUi
-hbMobSection.Visible = false 
-hbPathUi.Instance.Visible = false
+hbMobSection.Instance.Visible = false 
 
-TabHitbox:AddSection("Danger Zone")
 TabHitbox:AddButton("Reset Hitbox Configuration", THEME.RED, function()
     hitboxEnabled[currentHBT], hitboxSize[currentHBT], showHitbox[currentHBT] = false, 10, false
     for p, _ in pairs(selectedBodyParts[currentHBT]) do selectedBodyParts[currentHBT][p] = false end
